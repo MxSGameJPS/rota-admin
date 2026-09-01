@@ -2,6 +2,8 @@ import { getAIContract } from '@/schemas/contracts';
 import { generateTemplate } from './templates';
 import { generateWithDefaultProvider } from '@/services/ai/providerService';
 
+const STRUCTURED_GENERATION_TIMEOUT_MS = 300000;
+
 function buildCaseNpcRules(context = {}) {
   const publishedNpcs = Array.isArray(context.publishedNpcs) ? context.publishedNpcs : [];
   return [
@@ -58,6 +60,7 @@ export async function generateStructured(entityType, prompt, context = {}) {
     const result = await generateWithDefaultProvider({
       prompt,
       systemPrompt: buildSystemPrompt(contract, entityType, context),
+      timeoutMs: STRUCTURED_GENERATION_TIMEOUT_MS,
     });
     const parsed = parseStructuredText(result.text);
     if (entityType === 'case' && typeof parsed?.__reject === 'string') {
