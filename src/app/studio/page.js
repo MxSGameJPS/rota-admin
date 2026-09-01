@@ -1,0 +1,3 @@
+import { AI_CONTRACTS } from '@/schemas/contracts';
+import styles from '@/app/section.module.css';
+export default function StudioPage() { return <div className={styles.page}><div className={styles.header}><div><h2>AI Content Studio</h2><p>O Rota controla o formato. OmniRoute, OpenAI, Gemini, Claude ou outro provider apenas preenche o contrato e devolve JSON.</p></div></div><section className={styles.cards}>{Object.entries(AI_CONTRACTS).map(([type, contract]) => <article className={styles.card} key={type}><h4>{type.toUpperCase()}</h4><p>{contract.rule}</p></article>)}</section><section className={styles.panel}><h3>Contrato enviado ao provider</h3><pre className={styles.code}>{JSON.stringify(AI_CONTRACTS, null, 2)}</pre></section></div>; }
