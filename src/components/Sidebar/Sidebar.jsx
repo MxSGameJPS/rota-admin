@@ -10,6 +10,7 @@ const links = [
   ['/progression', 'Progressão'],
   ['/social-juridico', 'Social Jurídico In-Game'],
   ['/studio', 'AI Content Studio'],
+  ['/configuracoes/ia', 'Configurações de IA'],
 ];
 
 export default function Sidebar() {
