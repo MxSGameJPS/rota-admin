@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { generateStructured } from '@/lib/ai/provider';
 import { ENTITY_SCHEMAS } from '@/schemas/contracts';
-import { createDraft, publishEntity, updateDraft, createCurrency, createReward, publishReward, activateFeature, saveSetting } from '@/services/contentService';
+import { createDraft, publishEntity, updateDraft, createCurrency, createReward, publishReward, activateFeature, saveSetting, listPublishedNpcGenerationContext, validateCaseNpcAssignments } from '@/services/contentService';
 
 const routeByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const detailByType = { case: '/cases', npc: '/npcs', item: '/shop' };
@@ -15,8 +15,12 @@ export async function generateDraftAction(entityType, formData) {
   if (prompt.length < 10) fail(routeByType[entityType], 'Descreva melhor o conteúdo.');
   let id;
   try {
-    const generated = await generateStructured(entityType, prompt);
+    const context = entityType === 'case'
+      ? { publishedNpcs: await listPublishedNpcGenerationContext() }
+      : {};
+    const generated = await generateStructured(entityType, prompt, context);
     const parsed = ENTITY_SCHEMAS[entityType].parse(generated);
+    if (entityType === 'case') await validateCaseNpcAssignments(parsed.content);
     id = await createDraft(entityType, parsed);
     revalidatePath(routeByType[entityType]);
   } catch (error) { fail(routeByType[entityType], error.message || 'Falha ao gerar conteúdo.'); }
@@ -30,6 +34,7 @@ export async function updateJsonAction(entityType, formData) {
     const raw = JSON.parse(String(formData.get('json') || '{}'));
     if (entityType === 'npc') delete raw.id;
     const parsed = ENTITY_SCHEMAS[entityType].parse(raw);
+    if (entityType === 'case') await validateCaseNpcAssignments(parsed.content);
     await updateDraft(entityType, id, parsed);
     revalidatePath(route);
   } catch (error) { fail(route, error.message || 'JSON inválido.'); }
