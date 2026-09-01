@@ -105,7 +105,7 @@ export const ENTITY_SCHEMAS = { npc: npcSchema, case: caseSchema, item: catalogI
 
 export const AI_INSTRUCTIONS = {
   npc: 'Crie um NPC completo e coerente. Memórias, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir a personalidade e a função jurídica. Nunca omita os campos obrigatórios.',
-  case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes; NPCs existentes devem ser referenciados em npcAssignments pelo slug; ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
+  case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes. Personagens próprios do caso, como cliente, réu e testemunhas, não são NPCs persistentes e não entram em npcAssignments. Por padrão npcAssignments deve ser vazio. Só use npcAssignments quando o caso exigir um NPC persistente já publicado no universo, usando exclusivamente o slug fornecido pelo catálogo do Admin; nunca invente um NPC. Se o caso exigir obrigatoriamente um NPC persistente e nenhum disponível for compatível, recuse a geração conforme a instrução do provider. Ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
   item: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e sempre depender de validação server-side.',
 };
 
