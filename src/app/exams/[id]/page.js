@@ -3,12 +3,20 @@ import ExamEditor from '@/components/ExamEditor/ExamEditor';
 import { getExamForEditor } from '@/services/examService';
 import styles from '@/app/section.module.css';
 
+const labels = {
+  oab_first_phase: 'OAB - 1ª Fase',
+  mestrado: 'Mestrado',
+  doutorado: 'Doutorado',
+  concurso_juiz: 'Concurso para Juiz',
+  concurso_desembargador: 'Concurso para Desembargador',
+};
+
 export default async function ExamDetailPage({ params, searchParams }) {
   const { id } = await params; const query = await searchParams;
   let exam;
   try { exam = await getExamForEditor(id); } catch (error) { return <div className={styles.page}><div className={styles.error}>{error.message}</div><Link href="/exams">← Voltar</Link></div>; }
   return <div className={styles.page}>
-    <div className={styles.header}><div><Link href="/exams">← Exames</Link><h2>{exam.title}</h2><p>{exam.questions.length}/80 questões • {exam.status} • {exam.sourceKind}</p></div></div>
+    <div className={styles.header}><div><Link href="/exams">← Exames</Link><h2>{exam.title}</h2><p>{labels[exam.examType] || exam.examType}{exam.targetLevel ? ` • nível ${exam.targetLevel}/5` : ''} • {exam.questions.length}/{exam.questionCount} questões • corte {exam.passingScore} • {exam.status} • {exam.sourceKind}</p></div></div>
     {query?.created && <div className={styles.notice}>Draft criado e questões geradas.</div>}
     {query?.generated && <div className={styles.notice}>Geração de questões concluída.</div>}
     {query?.updated && <div className={styles.notice}>Rascunho salvo.</div>}
