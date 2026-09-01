@@ -1,0 +1,4 @@
+.badge { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font: 800 9px monospace; text-transform: uppercase; color: var(--muted); }
+.published { color: var(--green); border-color: rgba(79,209,165,.35); background: rgba(79,209,165,.08); }
+.draft { color: var(--gold); border-color: rgba(200,164,94,.35); background: rgba(200,164,94,.08); }
+.archived { color: var(--red); border-color: rgba(255,127,135,.3); background: rgba(255,127,135,.06); }
