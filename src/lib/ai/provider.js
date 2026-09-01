@@ -1,4 +1,4 @@
-import { AI_CONTRACTS } from '@/schemas/contracts';
+import { getAIContract } from '@/schemas/contracts';
 import { generateTemplate } from './templates';
 
 export async function generateStructured(entityType, prompt) {
@@ -13,9 +13,8 @@ export async function generateStructured(entityType, prompt) {
       ...(process.env.AI_PROVIDER_TOKEN ? { Authorization: `Bearer ${process.env.AI_PROVIDER_TOKEN}` } : {}),
     },
     body: JSON.stringify({
-      entityType,
       prompt,
-      contract: AI_CONTRACTS[entityType],
+      contract: getAIContract(entityType),
       responseFormat: 'json',
     }),
     cache: 'no-store',

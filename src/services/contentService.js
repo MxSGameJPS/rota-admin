@@ -1,34 +1,108 @@
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 
+const tableByType = { case: 'cases', npc: 'npcs', item: 'catalog_items' };
+
 function requireClient() {
   const client = getSupabaseAdmin();
   if (!client) throw new Error('Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env.local.');
   return client;
 }
 
-export async function createDraft(entityType, data) {
-  const client = requireClient();
-  if (entityType === 'case') {
-    const row = { id: data.id, code: data.code, title: data.title, area: data.area, difficulty: data.difficulty, difficulty_stars: data.difficultyStars, deadline_hours: data.deadlineHours, honorarios_reward: data.honorariosReward, xp_reward: data.xpReward, reputation_reward: data.reputationReward, min_career_tier: data.minCareerTier, status: 'draft', is_active: true, content: data.content, metadata: data.metadata || {} };
-    const { error } = await client.from('cases').insert(row); if (error) throw error; return data.id;
-  }
-  if (entityType === 'npc') {
-    const row = { slug: data.slug, name: data.name, role_type: data.roleType, profession: data.profession, specialization: data.specialization, jurisdiction: data.jurisdiction, status: 'draft', is_active: true, professional_profile: data.professionalProfile, personality: data.personality, base_memories: data.baseMemories, dialogue_library: data.dialogueLibrary, decision_rules: data.decisionRules, relationships: data.relationships, knowledge: data.knowledge, metadata: data.metadata || {} };
-    const { data: created, error } = await client.from('npcs').insert(row).select('id').single(); if (error) throw error; return created.id;
-  }
-  const row = { id: data.id, sku: data.sku, type: data.type, name: data.name, description: data.description, rarity: data.rarity, price_currency: data.priceCurrency, price_amount: data.priceAmount, status: 'draft', is_active: true, effects: data.effects, content: data.content, metadata: data.metadata || {} };
-  const { error } = await client.from('catalog_items').insert(row); if (error) throw error; return data.id;
+function caseRow(data) {
+  return { id: data.id, code: data.code, title: data.title, area: data.area, difficulty: data.difficulty, difficulty_stars: data.difficultyStars, deadline_hours: data.deadlineHours, honorarios_reward: data.honorariosReward, xp_reward: data.xpReward, reputation_reward: data.reputationReward, min_career_tier: data.minCareerTier, status: 'draft', is_active: true, content: data.content, metadata: data.metadata || {} };
+}
+function npcRow(data) {
+  return { slug: data.slug, name: data.name, role_type: data.roleType, profession: data.profession, specialization: data.specialization, jurisdiction: data.jurisdiction, status: 'draft', is_active: true, professional_profile: data.professionalProfile, personality: data.personality, base_memories: data.baseMemories, dialogue_library: data.dialogueLibrary, decision_rules: data.decisionRules, relationships: data.relationships, knowledge: data.knowledge, metadata: data.metadata || {} };
+}
+function itemRow(data) {
+  return { id: data.id, sku: data.sku, type: data.type, name: data.name, description: data.description, rarity: data.rarity, price_currency: data.priceCurrency, price_amount: data.priceAmount, status: 'draft', is_active: true, effects: data.effects, content: data.content, metadata: data.metadata || {} };
 }
 
-const tableByType = { case: 'cases', npc: 'npcs', item: 'catalog_items' };
+export async function createDraft(entityType, data) {
+  const client = requireClient();
+  if (entityType === 'case') { const { error } = await client.from('cases').insert(caseRow(data)); if (error) throw error; return data.id; }
+  if (entityType === 'npc') { const { data: created, error } = await client.from('npcs').insert(npcRow(data)).select('id').single(); if (error) throw error; return created.id; }
+  const { error } = await client.from('catalog_items').insert(itemRow(data)); if (error) throw error; return data.id;
+}
+
+export async function getEntityForEditor(entityType, id) {
+  const client = requireClient();
+  const table = tableByType[entityType];
+  const { data: row, error } = await client.from(table).select('*').eq('id', id).single();
+  if (error) throw error;
+  if (entityType === 'case') return { id: row.id, code: row.code, title: row.title, area: row.area, difficulty: row.difficulty, difficultyStars: row.difficulty_stars, deadlineHours: row.deadline_hours, honorariosReward: Number(row.honorarios_reward), xpReward: row.xp_reward, reputationReward: row.reputation_reward, minCareerTier: row.min_career_tier, content: row.content, metadata: row.metadata, status: row.status };
+  if (entityType === 'npc') return { id: row.id, name: row.name, slug: row.slug, roleType: row.role_type, profession: row.profession, specialization: row.specialization, jurisdiction: row.jurisdiction, professionalProfile: row.professional_profile, personality: row.personality, baseMemories: row.base_memories, dialogueLibrary: row.dialogue_library, decisionRules: row.decision_rules, relationships: row.relationships, knowledge: row.knowledge, metadata: row.metadata, status: row.status };
+  return { id: row.id, sku: row.sku, type: row.type, name: row.name, description: row.description, rarity: row.rarity, priceCurrency: row.price_currency, priceAmount: Number(row.price_amount), effects: row.effects, content: row.content, metadata: row.metadata, status: row.status };
+}
+
+export async function updateDraft(entityType, id, data) {
+  const client = requireClient();
+  const table = tableByType[entityType];
+  const { data: current, error: readError } = await client.from(table).select('status').eq('id', id).single();
+  if (readError) throw readError;
+  if (current.status !== 'draft') throw new Error('Somente conteúdo em draft pode ser editado nesta versão do Admin.');
+  const payload = entityType === 'case' ? caseRow(data) : entityType === 'npc' ? npcRow(data) : itemRow(data);
+  delete payload.id;
+  const { error } = await client.from(table).update(payload).eq('id', id);
+  if (error) throw error;
+  await client.from('admin_audit_logs').insert({ action: 'update_draft', entity_type: entityType, entity_id: String(id), payload: { source: 'json-editor' } });
+}
+
+function assertReady(entityType, row) {
+  if (entityType === 'case') {
+    const content = row.content || {};
+    if (!Array.isArray(content.locations) || content.locations.length === 0) throw new Error('Caso não pode ser publicado sem locais.');
+    if (!Array.isArray(content.availableClues) || content.availableClues.length === 0) throw new Error('Caso não pode ser publicado sem provas/pistas.');
+    if (!Array.isArray(content.strategies) || content.strategies.length === 0) throw new Error('Caso não pode ser publicado sem estratégias.');
+  }
+  if (entityType === 'npc') {
+    if (!Array.isArray(row.base_memories) || row.base_memories.length === 0) throw new Error('NPC precisa de memória-base.');
+    if (!Array.isArray(row.dialogue_library) || row.dialogue_library.length === 0) throw new Error('NPC precisa de diálogos.');
+    if (!Array.isArray(row.decision_rules) || row.decision_rules.length === 0) throw new Error('NPC precisa de regras de decisão.');
+  }
+}
 
 export async function publishEntity(entityType, id) {
   const client = requireClient();
   const table = tableByType[entityType];
   const { data: current, error: readError } = await client.from(table).select('*').eq('id', id).single();
   if (readError) throw readError;
-  await client.from('content_versions').insert({ entity_type: entityType, entity_id: String(id), version: current.version || 1, snapshot: current });
+  if (current.status !== 'draft') throw new Error('Somente drafts podem ser publicados.');
+  assertReady(entityType, current);
+  const { error: versionError } = await client.from('content_versions').insert({ entity_type: entityType, entity_id: String(id), version: current.version || 1, snapshot: current });
+  if (versionError) throw versionError;
   const { error } = await client.from(table).update({ status: 'published', is_active: true, published_at: new Date().toISOString() }).eq('id', id);
   if (error) throw error;
   await client.from('admin_audit_logs').insert({ action: 'publish', entity_type: entityType, entity_id: String(id), payload: { version: current.version || 1 } });
+}
+
+export async function createCurrency({ id, name, symbol, currencyType }) {
+  const client = requireClient();
+  const { error } = await client.from('game_currencies').insert({ id, name, symbol, currency_type: currencyType, status: 'published', is_active: true });
+  if (error) throw error;
+  await client.from('admin_audit_logs').insert({ action: 'create_currency', entity_type: 'currency', entity_id: id });
+}
+
+export async function createReward({ id, name, triggerType, conditions, reward, claimPolicy }) {
+  const client = requireClient();
+  const { error } = await client.from('reward_definitions').insert({ id, name, trigger_type: triggerType, status: 'draft', is_active: true, conditions, reward, metadata: { claimPolicy } });
+  if (error) throw error;
+}
+
+export async function publishReward(id) {
+  const client = requireClient();
+  const { error } = await client.from('reward_definitions').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', id).eq('status', 'draft');
+  if (error) throw error;
+}
+
+export async function activateFeature(id) {
+  const client = requireClient();
+  const { error } = await client.from('game_features').update({ status: 'published', is_active: true }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function saveSetting(key, value, description = '') {
+  const client = requireClient();
+  const { error } = await client.from('game_settings').upsert({ key, value, description, status: 'published', is_public: true });
+  if (error) throw error;
 }

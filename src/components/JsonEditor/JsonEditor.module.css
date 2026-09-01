@@ -1,0 +1,10 @@
+.grid { display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 16px; }
+.editor { display: grid; gap: 10px; }
+.editor textarea { min-height: 68vh; resize: vertical; background: #07080a; color: #d6dbe4; border: 1px solid var(--border); border-radius: 12px; padding: 16px; font: 11px/1.55 Consolas, monospace; tab-size: 2; }
+.editor button,.publish { justify-self: start; border: 0; border-radius: 9px; padding: 10px 14px; background: var(--gold); color: #08090a; font-weight: 800; }
+.side { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; align-self: start; position: sticky; top: 116px; }
+.side h3 { margin-top: 0; font: 700 16px Georgia, serif; }
+.side p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.side code { color: var(--gold); }
+.publish { background: var(--green); margin-top: 8px; }
+@media(max-width:900px){.grid{grid-template-columns:1fr}.side{position:static}.editor textarea{min-height:55vh}}

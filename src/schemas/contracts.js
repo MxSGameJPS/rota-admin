@@ -96,17 +96,18 @@ export const catalogItemSchema = z.object({
 
 export const ENTITY_SCHEMAS = { npc: npcSchema, case: caseSchema, item: catalogItemSchema };
 
-export const AI_CONTRACTS = {
-  npc: {
-    required: ['name','slug','roleType','profession','specialization','professionalProfile','personality','baseMemories','dialogueLibrary','decisionRules'],
-    rule: 'Crie um NPC completo e coerente. Memórias, diálogos e regras de decisão devem refletir a personalidade e a função jurídica.',
-  },
-  case: {
-    required: ['id','code','title','area','difficulty','difficultyStars','deadlineHours','xpReward','minCareerTier','content'],
-    rule: 'Crie um caso jogável. Toda pista citada deve possuir ID consistente; estratégias devem usar provas existentes; ferramentas Social Jurídico devem ser opcionais ou justificadas pela mecânica.',
-  },
-  item: {
-    required: ['id','sku','type','name','description','rarity','priceCurrency','priceAmount'],
-    rule: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e validados no backend.',
-  },
+export const AI_INSTRUCTIONS = {
+  npc: 'Crie um NPC completo e coerente. Memórias, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir a personalidade e a função jurídica. Nunca omita os campos obrigatórios.',
+  case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes; ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
+  item: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e sempre depender de validação server-side.',
 };
+
+export function getAIContract(entityType) {
+  const schema = ENTITY_SCHEMAS[entityType];
+  if (!schema) throw new Error(`Schema desconhecido: ${entityType}`);
+  return {
+    entityType,
+    instructions: AI_INSTRUCTIONS[entityType],
+    jsonSchema: z.toJSONSchema(schema),
+  };
+}

@@ -4,27 +4,60 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { generateStructured } from '@/lib/ai/provider';
 import { ENTITY_SCHEMAS } from '@/schemas/contracts';
-import { createDraft, publishEntity } from '@/services/contentService';
+import { createDraft, publishEntity, updateDraft, createCurrency, createReward, publishReward, activateFeature, saveSetting } from '@/services/contentService';
 
 const routeByType = { case: '/cases', npc: '/npcs', item: '/shop' };
+const detailByType = { case: '/cases', npc: '/npcs', item: '/shop' };
+const fail = (route, message) => redirect(`${route}?error=${encodeURIComponent(message)}`);
 
 export async function generateDraftAction(entityType, formData) {
   const prompt = String(formData.get('prompt') || '').trim();
-  if (prompt.length < 10) redirect(`${routeByType[entityType]}?error=${encodeURIComponent('Descreva melhor o conteúdo.')}`);
+  if (prompt.length < 10) fail(routeByType[entityType], 'Descreva melhor o conteúdo.');
   try {
     const generated = await generateStructured(entityType, prompt);
     const parsed = ENTITY_SCHEMAS[entityType].parse(generated);
-    await createDraft(entityType, parsed);
+    const id = await createDraft(entityType, parsed);
     revalidatePath(routeByType[entityType]);
-  } catch (error) {
-    redirect(`${routeByType[entityType]}?error=${encodeURIComponent(error.message || 'Falha ao gerar conteúdo.')}`);
-  }
-  redirect(`${routeByType[entityType]}?created=1`);
+    redirect(`${detailByType[entityType]}/${id}?created=1`);
+  } catch (error) { fail(routeByType[entityType], error.message || 'Falha ao gerar conteúdo.'); }
+}
+
+export async function updateJsonAction(entityType, formData) {
+  const id = String(formData.get('id') || '');
+  const route = `${detailByType[entityType]}/${id}`;
+  try {
+    const raw = JSON.parse(String(formData.get('json') || '{}'));
+    if (entityType === 'npc') delete raw.id;
+    const parsed = ENTITY_SCHEMAS[entityType].parse(raw);
+    await updateDraft(entityType, id, parsed);
+    revalidatePath(route);
+  } catch (error) { fail(route, error.message || 'JSON inválido.'); }
+  redirect(`${route}?updated=1`);
 }
 
 export async function publishAction(entityType, formData) {
   const id = String(formData.get('id') || '');
   try { await publishEntity(entityType, id); revalidatePath(routeByType[entityType]); }
-  catch (error) { redirect(`${routeByType[entityType]}?error=${encodeURIComponent(error.message || 'Falha ao publicar.')}`); }
+  catch (error) { fail(`${detailByType[entityType]}/${id}`, error.message || 'Falha ao publicar.'); }
   redirect(`${routeByType[entityType]}?published=1`);
 }
+
+export async function createCurrencyAction(formData) {
+  try { await createCurrency({ id: String(formData.get('id') || '').trim(), name: String(formData.get('name') || '').trim(), symbol: String(formData.get('symbol') || '').trim(), currencyType: String(formData.get('currencyType') || 'common') }); revalidatePath('/economy'); }
+  catch (error) { fail('/economy', error.message); }
+  redirect('/economy?created=currency');
+}
+
+export async function createRewardAction(formData) {
+  try {
+    const conditions = JSON.parse(String(formData.get('conditions') || '{}'));
+    const reward = JSON.parse(String(formData.get('reward') || '{}'));
+    await createReward({ id: String(formData.get('id') || '').trim(), name: String(formData.get('name') || '').trim(), triggerType: String(formData.get('triggerType') || '').trim(), conditions, reward, claimPolicy: String(formData.get('claimPolicy') || 'once') });
+    revalidatePath('/economy');
+  } catch (error) { fail('/economy', error.message); }
+  redirect('/economy?created=reward');
+}
+
+export async function publishRewardAction(formData) { try { await publishReward(String(formData.get('id') || '')); revalidatePath('/economy'); } catch (error) { fail('/economy', error.message); } redirect('/economy?published=reward'); }
+export async function activateFeatureAction(formData) { try { await activateFeature(String(formData.get('id') || '')); revalidatePath('/social-juridico'); } catch (error) { fail('/social-juridico', error.message); } redirect('/social-juridico?published=1'); }
+export async function saveSettingAction(formData) { try { await saveSetting(String(formData.get('key') || '').trim(), JSON.parse(String(formData.get('value') || '{}')), String(formData.get('description') || '').trim()); revalidatePath('/progression'); } catch (error) { fail('/progression', error.message); } redirect('/progression?saved=1'); }
