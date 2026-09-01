@@ -20,23 +20,31 @@ function buildCaseNpcRules(context = {}) {
 
 function buildExamRules(entityType, context = {}) {
   if (entityType === 'exam') {
+    const preset = context.preset || {};
     return [
       'REGRA CRÍTICA SOBRE PROVAS GERADAS:',
       '- Esta é uma NOVA prova simulada produzida para o Rota da Justiça, não uma prova oficial.',
-      '- Use como referência somente a DISTRIBUIÇÃO DE MATÉRIAS e o nível geral do escopo fornecido.',
-      '- Não copie nem reescreva de perto questões do 46º Exame de Ordem de 2026.',
-      '- Fixe questionCount=80, passingScore=40 e durationMinutes=300.',
-      'ESCOPO DE REFERÊNCIA:', JSON.stringify(context.scopeSummary || []),
+      `- examType deve ser exatamente: ${preset.id || context.examType || 'o tipo informado'}.`,
+      `- questionCount deve ser exatamente: ${preset.questionCount || context.questionCount}.`,
+      `- passingScore deve ser exatamente: ${context.passingScore}.`,
+      `- durationMinutes deve ser exatamente: ${context.durationMinutes}.`,
+      `- targetLevel deve ser exatamente: ${context.targetLevel ?? 'null'}.`,
+      '- Não altere os parâmetros estruturais definidos pelo administrador.',
+      '- Para OAB, use a referência apenas para distribuição de matérias e nível; não copie nem reescreva de perto questões oficiais.',
+      `INSTRUÇÕES DO TIPO: ${preset.instructions || ''}`,
+      'ESCOPO DE REFERÊNCIA:', JSON.stringify(preset.scopeSummary || []),
+      'REGRAS DE ELEGIBILIDADE:', JSON.stringify(preset.eligibility || {}),
     ].join('\n');
   }
   if (entityType === 'examQuestionBatch') {
     return [
       'LOTE DE QUESTÕES - REGRAS OBRIGATÓRIAS:',
       '- Retorne exatamente uma questão para cada item de expectedQuestions.',
-      '- number e area devem coincidir exatamente com expectedQuestions.',
+      '- number deve coincidir exatamente com expectedQuestions.',
+      '- Se expectedQuestions informar area, use exatamente essa área; se area for null, escolha uma área jurídica coerente com a prova.',
       '- Quatro alternativas A, B, C e D, sem repetição; somente uma correta.',
       '- Enunciados, personagens e situações devem ser originais.',
-      '- Não copie ou parafraseie de perto nenhuma questão oficial usada como referência.',
+      '- Não copie ou parafraseie de perto qualquer prova usada como referência.',
       'QUESTÕES ESPERADAS NESTE LOTE:', JSON.stringify(context.expectedQuestions || []),
       'DADOS DA PROVA:', JSON.stringify(context.exam || {}),
     ].join('\n');
