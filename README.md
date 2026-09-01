@@ -37,7 +37,7 @@ Preencha:
 
 ```env
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxxx
 ```
 
 Depois:
@@ -54,45 +54,51 @@ http://127.0.0.1:3001
 
 ## IA / OmniRoute / outros providers
 
-O Admin é **schema-driven**. O formato pertence ao Rota da Justiça, não ao provider de IA.
+A configuração de IA não fica mais no `.env.local`. Abra no painel:
 
-Sem provider configurado:
-
-```env
-AI_PROVIDER=template
+```text
+Configurações de IA
 ```
 
-O painel cria um rascunho estrutural local.
+O Admin suporta:
 
-Para conectar uma IA através de um bridge HTTP local:
+- API compatível com OpenAI
+- OmniRoute local
+- Ollama local
+- Endpoint REST personalizado
 
-```env
-AI_PROVIDER=http
-AI_PROVIDER_ENDPOINT=http://127.0.0.1:PORTA/SEU-ENDPOINT
-AI_PROVIDER_TOKEN=
+Para OmniRoute existe um preset com:
+
+```text
+http://localhost:20128/v1
+/chat/completions
 ```
 
-O endpoint recebe JSON com:
+O painel permite salvar o provedor, consultar `/models`, escolher o modelo e testar a conexão.
 
-```json
-{
-  "prompt": "...",
-  "contract": {
-    "entityType": "npc",
-    "instructions": "...",
-    "jsonSchema": {}
-  },
-  "responseFormat": "json"
-}
+As chaves são armazenadas localmente em `data/ai-config/` usando AES-256-GCM. O arquivo criptografado e a chave local são ignorados pelo Git e nunca são devolvidos ao navegador.
+
+O Admin continua sendo **schema-driven**:
+
+```text
+Prompt
+  ↓
+Provider padrão
+  ↓
+JSON Schema oficial do Rota
+  ↓
+Resposta JSON
+  ↓
+Validação Zod
+  ↓
+Draft
+  ↓
+Revisão manual
+  ↓
+Publicação
 ```
 
-E deve devolver o objeto final ou:
-
-```json
-{ "data": {} }
-```
-
-Antes de salvar, o Admin valida a resposta com Zod. A IA nunca publica diretamente.
+Se nenhum provider estiver configurado, o painel usa o gerador de template local como fallback. A IA nunca publica conteúdo diretamente.
 
 ## Banco do Rota
 
