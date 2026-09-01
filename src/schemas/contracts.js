@@ -72,6 +72,13 @@ export const caseSchema = z.object({
     locations: z.array(z.record(z.string(), z.unknown())).default([]),
     availableClues: z.array(z.record(z.string(), z.unknown())).default([]),
     strategies: z.array(z.record(z.string(), z.unknown())).default([]),
+    npcAssignments: z.array(z.object({
+      npcSlug: z.string().min(2),
+      roleInCase: z.string().min(2),
+      isRequired: z.boolean().default(false),
+      sortOrder: z.number().int().default(0),
+      configuration: z.record(z.string(), z.unknown()).default({}),
+    })).default([]),
     socialJuridicoTools: z.array(z.record(z.string(), z.unknown())).default([]),
     minimumPassingScore: z.number().int().min(0).max(100).default(70),
   }),
@@ -98,16 +105,12 @@ export const ENTITY_SCHEMAS = { npc: npcSchema, case: caseSchema, item: catalogI
 
 export const AI_INSTRUCTIONS = {
   npc: 'Crie um NPC completo e coerente. Memórias, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir a personalidade e a função jurídica. Nunca omita os campos obrigatórios.',
-  case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes; ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
+  case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes; NPCs existentes devem ser referenciados em npcAssignments pelo slug; ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
   item: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e sempre depender de validação server-side.',
 };
 
 export function getAIContract(entityType) {
   const schema = ENTITY_SCHEMAS[entityType];
   if (!schema) throw new Error(`Schema desconhecido: ${entityType}`);
-  return {
-    entityType,
-    instructions: AI_INSTRUCTIONS[entityType],
-    jsonSchema: z.toJSONSchema(schema),
-  };
+  return { entityType, instructions: AI_INSTRUCTIONS[entityType], jsonSchema: z.toJSONSchema(schema) };
 }

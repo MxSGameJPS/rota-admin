@@ -13,13 +13,14 @@ const fail = (route, message) => redirect(`${route}?error=${encodeURIComponent(m
 export async function generateDraftAction(entityType, formData) {
   const prompt = String(formData.get('prompt') || '').trim();
   if (prompt.length < 10) fail(routeByType[entityType], 'Descreva melhor o conteúdo.');
+  let id;
   try {
     const generated = await generateStructured(entityType, prompt);
     const parsed = ENTITY_SCHEMAS[entityType].parse(generated);
-    const id = await createDraft(entityType, parsed);
+    id = await createDraft(entityType, parsed);
     revalidatePath(routeByType[entityType]);
-    redirect(`${detailByType[entityType]}/${id}?created=1`);
   } catch (error) { fail(routeByType[entityType], error.message || 'Falha ao gerar conteúdo.'); }
+  redirect(`${detailByType[entityType]}/${id}?created=1`);
 }
 
 export async function updateJsonAction(entityType, formData) {

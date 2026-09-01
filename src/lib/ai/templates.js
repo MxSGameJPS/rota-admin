@@ -21,7 +21,7 @@ export function generateTemplate(entityType, prompt) {
     return {
       id: `CASE_DRAFT_${now}`, code: `DRAFT-${String(now).slice(-7)}`, title: cleanTitle(prompt, 'Novo caso em revisão'), area: 'A definir', difficulty: 'Iniciante', difficultyStars: 1, deadlineHours: 48,
       honorariosReward: 1200, xpReward: 90, reputationReward: 4, minCareerTier: 'ESTAGIARIO',
-      content: { client: { name: 'Cliente em revisão', summary: prompt }, briefing: { mainObjective: 'Completar o caso no editor antes da publicação.' }, locations: [], availableClues: [], strategies: [], socialJuridicoTools: [], minimumPassingScore: 70 },
+      content: { client: { name: 'Cliente em revisão', summary: prompt }, briefing: { mainObjective: 'Completar o caso no editor antes da publicação.' }, locations: [], availableClues: [], strategies: [], npcAssignments: [], socialJuridicoTools: [], minimumPassingScore: 70 },
       metadata: { generationPrompt: prompt, generatedWith: 'template' }, status: 'draft',
     };
   }
