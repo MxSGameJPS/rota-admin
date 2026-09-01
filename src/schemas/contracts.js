@@ -30,6 +30,8 @@ export const catalogItemSchema = z.object({
   priceCurrency: z.string().min(2), priceAmount: z.number().int().min(0), effects: z.record(z.string(), z.unknown()).default({}), content: z.record(z.string(), z.unknown()).default({}), metadata: z.record(z.string(), z.unknown()).default({}), status,
 });
 
+export const examTypeSchema = z.enum(['oab_first_phase', 'mestrado', 'doutorado', 'concurso_juiz', 'concurso_desembargador']);
+
 export const examQuestionSchema = z.object({
   number: z.number().int().min(1).max(120),
   area: z.string().min(3),
@@ -40,26 +42,58 @@ export const examQuestionSchema = z.object({
   difficulty: z.enum(['fácil', 'média', 'difícil']).default('média'),
 });
 
-export const examSchema = z.object({
+const examBaseSchema = z.object({
   slug: z.string().min(4).regex(/^[a-z0-9-]+$/),
   title: z.string().min(8),
-  examType: z.literal('oab_first_phase').default('oab_first_phase'),
+  examType: examTypeSchema,
+  targetLevel: z.number().int().min(1).max(5).nullable().default(null),
   editionNumber: z.number().int().positive().nullable().default(null),
   year: z.number().int().min(2020).max(2100),
   sourceKind: z.literal('ai_generated').default('ai_generated'),
   sourceLabel: z.string().min(5),
-  questionCount: z.literal(80).default(80),
-  passingScore: z.literal(40).default(40),
-  durationMinutes: z.literal(300).default(300),
+  questionCount: z.number().int().min(20).max(80),
+  passingScore: z.number().int().positive(),
+  durationMinutes: z.number().int().min(15).max(600),
   simulationNotice: z.string().min(20),
   disclaimer: z.string().min(20),
   generationBrief: z.string().min(20),
+  eligibilityRules: z.record(z.string(), z.unknown()).default({}),
   metadata: z.record(z.string(), z.unknown()).default({}),
   status,
 });
 
+export const examSchema = examBaseSchema.superRefine((data, ctx) => {
+  const expectedCounts = {
+    oab_first_phase: 80,
+    mestrado: 40,
+    doutorado: 40,
+    concurso_juiz: 20,
+    concurso_desembargador: 20,
+  };
+  if (data.questionCount !== expectedCounts[data.examType]) {
+    ctx.addIssue({ code: 'custom', path: ['questionCount'], message: `${data.examType} deve ter ${expectedCounts[data.examType]} questões.` });
+  }
+  if (data.passingScore > data.questionCount) {
+    ctx.addIssue({ code: 'custom', path: ['passingScore'], message: 'A nota de corte não pode superar o total de questões.' });
+  }
+  if (['mestrado', 'doutorado'].includes(data.examType) && data.targetLevel == null) {
+    ctx.addIssue({ code: 'custom', path: ['targetLevel'], message: 'Mestrado e Doutorado precisam indicar o nível-alvo de 1 a 5.' });
+  }
+  if (!['mestrado', 'doutorado'].includes(data.examType) && data.targetLevel != null) {
+    ctx.addIssue({ code: 'custom', path: ['targetLevel'], message: 'Este tipo de exame não utiliza nível-alvo.' });
+  }
+  if (data.examType === 'oab_first_phase' && (data.passingScore !== 40 || data.durationMinutes !== 300)) {
+    ctx.addIssue({ code: 'custom', path: ['passingScore'], message: 'O preset da OAB usa 40 acertos e 300 minutos.' });
+  }
+});
+
 export const examQuestionBatchSchema = z.object({ questions: z.array(examQuestionSchema).min(1).max(10) });
-export const examDraftSchema = examSchema.extend({ questions: z.array(examQuestionSchema).max(80).default([]) });
+export const examDraftSchema = examBaseSchema.extend({ questions: z.array(examQuestionSchema).max(80).default([]) }).superRefine((data, ctx) => {
+  const expectedCounts = { oab_first_phase: 80, mestrado: 40, doutorado: 40, concurso_juiz: 20, concurso_desembargador: 20 };
+  if (data.questionCount !== expectedCounts[data.examType]) ctx.addIssue({ code: 'custom', path: ['questionCount'], message: 'Quantidade de questões incompatível com o tipo de prova.' });
+  if (data.passingScore > data.questionCount) ctx.addIssue({ code: 'custom', path: ['passingScore'], message: 'Nota de corte inválida.' });
+  if (['mestrado', 'doutorado'].includes(data.examType) && data.targetLevel == null) ctx.addIssue({ code: 'custom', path: ['targetLevel'], message: 'Informe o nível acadêmico.' });
+});
 
 export const ENTITY_SCHEMAS = { npc: npcSchema, case: caseSchema, item: catalogItemSchema, exam: examSchema, examQuestionBatch: examQuestionBatchSchema };
 
@@ -67,8 +101,8 @@ export const AI_INSTRUCTIONS = {
   npc: 'Crie um NPC completo e coerente. Memórias, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir a personalidade e a função jurídica. Nunca omita os campos obrigatórios.',
   case: 'Crie um caso jogável. IDs devem ser consistentes; pistas citadas devem existir; estratégias devem usar provas existentes. Personagens próprios do caso, como cliente, réu e testemunhas, não são NPCs persistentes e não entram em npcAssignments. Por padrão npcAssignments deve ser vazio. Só use npcAssignments quando o caso exigir um NPC persistente já publicado no universo, usando exclusivamente o slug fornecido pelo catálogo do Admin; nunca invente um NPC. Se o caso exigir obrigatoriamente um NPC persistente e nenhum disponível for compatível, recuse a geração conforme a instrução do provider. Ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.',
   item: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e sempre depender de validação server-side.',
-  exam: 'Crie os metadados de um NOVO simulado de 1ª fase da OAB. A prova terá 80 questões, 5 horas e aprovação com 40 acertos. O conteúdo deve ser original e apenas seguir o escopo, distribuição de matérias e nível de raciocínio indicados. Nunca declare que uma prova gerada por IA é oficial, real, da OAB ou da FGV. sourceKind deve ser ai_generated.',
-  examQuestionBatch: 'Crie somente as questões solicitadas no lote. Cada questão deve ser ORIGINAL, juridicamente plausível, objetiva, ter quatro alternativas A-D, uma única resposta correta e explicação. Não copie, parafraseie de perto nem reutilize personagens/enunciados da prova oficial de referência. Respeite exatamente os números e áreas exigidos no contexto.',
+  exam: 'Crie os metadados de uma NOVA avaliação simulada do Rota da Justiça. Respeite integralmente o tipo, a quantidade de questões, o nível-alvo, a duração e o corte fornecidos pelo contexto. Nunca declare uma prova gerada por IA como oficial, real ou emitida por uma instituição pública.',
+  examQuestionBatch: 'Crie somente as questões solicitadas no lote. Cada questão deve ser ORIGINAL, juridicamente plausível, objetiva, ter quatro alternativas A-D, uma única resposta correta e explicação. Respeite exatamente os números solicitados. Quando o contexto fixar uma área, use-a; quando a área vier livre, escolha uma área coerente com o tipo, nível e briefing da prova.',
 };
 
 export function getAIContract(entityType) {
