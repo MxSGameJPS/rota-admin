@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { flushSync } from 'react-dom';
 import styles from './GenerateDraftForm.module.css';
 
 function formatElapsed(seconds) {
@@ -10,40 +10,54 @@ function formatElapsed(seconds) {
   return minutes > 0 ? `${minutes}m ${String(rest).padStart(2, '0')}s` : `${rest}s`;
 }
 
-function PendingState({ entityLabel, buttonLabel }) {
-  const { pending } = useFormStatus();
+function getProgressCopy(elapsed, entityLabel) {
+  if (elapsed < 3) return `Enviando o briefing de ${entityLabel} para o provedor...`;
+  if (elapsed < 30) return 'A IA recebeu a solicitação. Aguardando a geração estruturada...';
+  if (elapsed < 120) return 'A IA continua trabalhando no conteúdo e no JSON Schema oficial do Rota...';
+  return 'A geração ainda está em andamento. Conteúdos completos podem levar alguns minutos.';
+}
+
+export default function GenerateDraftForm({ action, placeholder, buttonLabel = 'Gerar rascunho', entityLabel = 'rascunho' }) {
+  const [submitting, setSubmitting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!pending) {
+    if (!submitting) {
       setElapsed(0);
       return undefined;
     }
     const started = Date.now();
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => clearInterval(timer);
-  }, [pending]);
+  }, [submitting]);
+
+  function handleSubmit() {
+    // Não dependemos de useFormStatus aqui: o feedback precisa aparecer no mesmo
+    // instante do clique, antes da Server Action começar a aguardar o provider.
+    flushSync(() => setSubmitting(true));
+  }
 
   return <>
-    <button className={styles.primary} disabled={pending} aria-busy={pending}>
-      {pending ? <><span className={styles.spinner} aria-hidden="true"/>Gerando {entityLabel}…</> : buttonLabel}
-    </button>
-    {pending && <div className={styles.progress} role="status" aria-live="polite">
-      <div className={styles.progressHeader}>
-        <span className={styles.pulse}/>
-        <strong>IA trabalhando</strong>
-        <span className={styles.elapsed}>{formatElapsed(elapsed)}</span>
+    <form className={styles.form} action={action} onSubmit={handleSubmit}>
+      <textarea name="prompt" placeholder={placeholder} required disabled={submitting}/>
+      <button className={styles.primary} disabled={submitting} aria-busy={submitting}>
+        {submitting ? <><span className={styles.spinner} aria-hidden="true"/>Gerando {entityLabel}…</> : buttonLabel}
+      </button>
+    </form>
+
+    {submitting && <div className={styles.overlay} role="status" aria-live="assertive" aria-busy="true">
+      <div className={styles.overlayCard}>
+        <div className={styles.heroSpinner} aria-hidden="true"/>
+        <span className={styles.eyebrow}>ROTA ADMIN • IA EM EXECUÇÃO</span>
+        <h3>Gerando {entityLabel}…</h3>
+        <p className={styles.copy}>{getProgressCopy(elapsed, entityLabel)}</p>
+        <div className={styles.progressBar}><span/></div>
+        <div className={styles.meta}>
+          <span><span className={styles.pulse}/> Processo ativo</span>
+          <strong>{formatElapsed(elapsed)}</strong>
+        </div>
+        <small>Não feche nem atualize esta página. Ao concluir, o Admin abrirá o draft automaticamente. O limite desta geração é de até 5 minutos.</small>
       </div>
-      <div className={styles.progressBar}><span/></div>
-      <p>Enviando briefing, aplicando o schema oficial do Rota e aguardando o provedor. Conteúdos completos podem levar alguns minutos.</p>
-      <small>Não feche esta página nem envie novamente enquanto a geração estiver em andamento.</small>
     </div>}
   </>;
-}
-
-export default function GenerateDraftForm({ action, placeholder, buttonLabel = 'Gerar rascunho', entityLabel = 'rascunho' }) {
-  return <form className={styles.form} action={action}>
-    <textarea name="prompt" placeholder={placeholder} required/>
-    <PendingState entityLabel={entityLabel} buttonLabel={buttonLabel}/>
-  </form>;
 }
