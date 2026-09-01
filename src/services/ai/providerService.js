@@ -46,7 +46,7 @@ function normalizeProvider(input, existing = null) {
     apiKey: String(input.apiKey || existing?.apiKey || '').trim(),
     temperature: clampNumber(input.temperature ?? existing?.temperature, 0.35, 0, 2),
     maxTokens: Math.round(clampNumber(input.maxTokens ?? existing?.maxTokens, 5000, 1, 200000)),
-    timeout: Math.round(clampNumber(input.timeout ?? existing?.timeout, 120000, 1000, 300000)),
+    timeout: Math.round(clampNumber(input.timeout ?? existing?.timeout, 120000, 1000, 600000)),
     method: String(input.method || existing?.method || 'POST').toUpperCase(),
     authType: String(input.authType || existing?.authType || (type === 'ollama' ? 'none' : 'bearer')),
     authHeader: String(input.authHeader || existing?.authHeader || 'Authorization').trim(),
@@ -97,7 +97,13 @@ function normalizeGenerationRequest(input) {
   const request = typeof input === 'string' ? { prompt: input } : (input || {});
   const prompt = String(request.prompt || '').trim();
   if (!prompt) throw new Error('Informe o conteúdo que será enviado para a IA.');
-  return { prompt, systemPrompt: String(request.systemPrompt || '').trim() };
+  return {
+    prompt,
+    systemPrompt: String(request.systemPrompt || '').trim(),
+    timeoutMs: request.timeoutMs == null
+      ? null
+      : Math.round(clampNumber(request.timeoutMs, 120000, 1000, 600000)),
+  };
 }
 
 function ensureReadyForGeneration(provider) {
@@ -115,12 +121,13 @@ function authRequest(provider, url, headers) {
   return target;
 }
 
-async function requestJson(provider, { url, method = 'POST', body }) {
+async function requestJson(provider, { url, method = 'POST', body, timeoutMs = null }) {
   const headers = { Accept: 'application/json', ...parseJsonObject(provider.headersJson, 'Cabeçalhos adicionais') };
   if (body !== undefined) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   const target = authRequest(provider, url, headers);
+  const effectiveTimeout = Math.round(clampNumber(timeoutMs ?? provider.timeout, provider.timeout || 120000, 1000, 600000));
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), provider.timeout || 120000);
+  const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
   const started = Date.now();
   try {
     const response = await fetch(target, {
@@ -139,7 +146,9 @@ async function requestJson(provider, { url, method = 'POST', body }) {
     }
     return { data: parsed, status: response.status, elapsedMs: Date.now() - started };
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('A conexão com o provedor excedeu o tempo limite.');
+    if (error?.name === 'AbortError') {
+      throw new Error(`O provedor excedeu o tempo limite de ${Math.round(effectiveTimeout / 1000)} segundos.`);
+    }
     if (error?.cause?.code === 'ECONNREFUSED') throw new Error(`Não foi possível conectar em ${provider.baseUrl}. Confirme se o serviço está em execução.`);
     throw error;
   } finally {
@@ -155,6 +164,7 @@ async function generateOpenAICompatible(provider, requestInput) {
   messages.push({ role: 'user', content: request.prompt });
   const result = await requestJson(provider, {
     url: provider.baseUrl + (endpoint.startsWith('/') ? endpoint : '/' + endpoint),
+    timeoutMs: request.timeoutMs,
     body: {
       model: provider.model,
       messages,
@@ -178,6 +188,7 @@ async function generateOllama(provider, requestInput) {
   messages.push({ role: 'user', content: request.prompt });
   const result = await requestJson(provider, {
     url: provider.baseUrl + (endpoint.startsWith('/') ? endpoint : '/' + endpoint),
+    timeoutMs: request.timeoutMs,
     body: {
       model: provider.model,
       messages,
@@ -212,6 +223,7 @@ async function generateCustom(provider, requestInput) {
   const result = await requestJson(provider, {
     url: provider.baseUrl + (endpoint ? (endpoint.startsWith('/') ? endpoint : '/' + endpoint) : ''),
     method: provider.method || 'POST',
+    timeoutMs: request.timeoutMs,
     body: provider.method === 'GET' ? undefined : templateValue(template, variables),
   });
   const output = getPath(result.data, provider.responsePath || 'choices[0].message.content');
@@ -276,9 +288,11 @@ export async function removeProvider(id) {
 }
 
 export async function testProvider(id) {
-  const result = await generateInternal(await getProviderInternal(id), {
+  const provider = await getProviderInternal(id);
+  const result = await generateInternal(provider, {
     systemPrompt: 'Você está executando um teste de conexão.',
     prompt: 'Responda somente com a palavra OK.',
+    timeoutMs: Math.min(provider.timeout || 120000, 30000),
   });
   return {
     ok: true,

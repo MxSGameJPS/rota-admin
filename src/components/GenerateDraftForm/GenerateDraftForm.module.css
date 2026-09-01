@@ -1,0 +1,17 @@
+.form{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.form textarea{min-height:130px;width:100%;resize:vertical;border:1px solid #292d35;background:#090a0c;color:#f2f0ea;border-radius:10px;padding:14px;font:inherit;line-height:1.55}
+.form textarea:focus{outline:2px solid #c8a45e;outline-offset:1px}
+.primary{align-self:flex-start;display:inline-flex;align-items:center;gap:9px;border:0;border-radius:9px;padding:11px 16px;background:#c8a45e;color:#090a0c;font-weight:900;cursor:pointer}
+.primary:disabled{opacity:.82;cursor:wait}
+.spinner{width:16px;height:16px;border:2px solid rgba(9,10,12,.28);border-top-color:#090a0c;border-radius:50%;animation:spin .8s linear infinite}
+.progress{border:1px solid rgba(102,167,255,.3);background:linear-gradient(180deg,rgba(102,167,255,.09),rgba(102,167,255,.035));border-radius:12px;padding:14px 15px;max-width:760px}
+.progressHeader{display:flex;align-items:center;gap:9px;color:#f2f0ea}
+.pulse{width:9px;height:9px;border-radius:50%;background:#4fd1a5;box-shadow:0 0 0 0 rgba(79,209,165,.5);animation:pulse 1.5s infinite}
+.elapsed{margin-left:auto;font:700 12px monospace;color:#9298a4}
+.progressBar{height:4px;overflow:hidden;border-radius:999px;background:#292d35;margin:11px 0}
+.progressBar span{display:block;width:36%;height:100%;border-radius:999px;background:#66a7ff;animation:travel 1.7s ease-in-out infinite}
+.progress p{margin:0 0 7px;color:#c7cad1;font-size:13px;line-height:1.5}
+.progress small{color:#9298a4;font-size:11px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,209,165,.5)}70%{box-shadow:0 0 0 8px rgba(79,209,165,0)}100%{box-shadow:0 0 0 0 rgba(79,209,165,0)}}
+@keyframes travel{0%{transform:translateX(-105%)}50%{transform:translateX(180%)}100%{transform:translateX(-105%)}}

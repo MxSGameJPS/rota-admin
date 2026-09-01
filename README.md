@@ -2,7 +2,7 @@
 
 Game Master / CMS local do **Rota da Justiça**.
 
-Este projeto **não deve ser publicado na Vercel**. Ele foi desenhado para rodar somente na máquina do administrador em `127.0.0.1:3001` e conversar diretamente com o Supabase do Rota da Justiça.
+Este projeto **não deve ser publicado na Vercel**. Ele foi desenhado para rodar somente na máquina do administrador em `localhost:3001` e conversar diretamente com o Supabase do Rota da Justiça.
 
 ## O que administra
 
@@ -22,7 +22,7 @@ Este projeto **não deve ser publicado na Vercel**. Ele foi desenhado para rodar
 
 A `SUPABASE_SERVICE_ROLE_KEY` existe somente no servidor local do Next.js. Nunca use prefixo `NEXT_PUBLIC_` e nunca coloque a chave no navegador, no jogo ou em commits.
 
-O servidor de desenvolvimento está preso a `127.0.0.1`, não a `0.0.0.0`.
+O servidor de desenvolvimento usa `localhost`, permanecendo no loopback da máquina local.
 
 > Recomenda-se manter este repositório privado.
 
@@ -49,7 +49,7 @@ npm run dev
 Abra:
 
 ```text
-http://127.0.0.1:3001
+http://localhost:3001
 ```
 
 ## IA / OmniRoute / outros providers
@@ -97,6 +97,8 @@ Revisão manual
   ↓
 Publicação
 ```
+
+Gerações completas de caso, NPC e item usam uma janela de até 5 minutos. Durante a chamada, a interface mostra atividade, contador de tempo e barra animada, além de bloquear novo envio até a resposta chegar.
 
 Se nenhum provider estiver configurado, o painel usa o gerador de template local como fallback. A IA nunca publica conteúdo diretamente.
 
