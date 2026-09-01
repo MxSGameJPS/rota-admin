@@ -7,3 +7,6 @@ dist/
 .env.*.local
 *.log
 .DS_Store
+
+# Configurações locais e criptografadas dos provedores de IA
+data/ai-config/
