@@ -11,7 +11,7 @@ function formatElapsed(seconds) {
 function getProgressCopy(elapsed, entityLabel, longRunning) {
   if (elapsed < 3) return `Enviando o briefing de ${entityLabel} para o provedor...`;
   if (elapsed < 30) return 'A IA recebeu a solicitação. Aguardando a geração estruturada...';
-  if (longRunning && elapsed >= 30) return 'A prova está sendo montada em lotes. O Admin continua chamando a IA e validando cada bloco antes de salvar.';
+  if (longRunning && elapsed >= 30) return `O ${entityLabel} está sendo montado em etapas. O Admin gera blocos menores e valida cada parte antes de montar o JSON final.`;
   if (elapsed < 120) return 'A IA continua trabalhando no conteúdo e no JSON Schema oficial do Rota...';
   return 'A geração ainda está em andamento. Conteúdos completos podem levar alguns minutos.';
 }
@@ -39,7 +39,7 @@ export default function GenerateDraftForm({ action, placeholder, buttonLabel = '
       <div className={styles.heroSpinner} aria-hidden="true"/><span className={styles.eyebrow}>ROTA ADMIN • IA EM EXECUÇÃO</span><h3>Gerando {entityLabel}…</h3>
       <p className={styles.copy}>{getProgressCopy(elapsed, entityLabel, longRunning)}</p><div className={styles.progressBar}><span/></div>
       <div className={styles.meta}><span><span className={styles.pulse}/> Processo ativo</span><strong>{formatElapsed(elapsed)}</strong></div>
-      <small>{longRunning ? 'Não feche nem atualize esta página. Provas completas são geradas e validadas em vários lotes e podem levar vários minutos.' : 'Não feche nem atualize esta página. Ao concluir, o Admin abrirá o draft automaticamente. O limite de cada chamada ao provedor é de até 5 minutos.'}</small>
+      <small>{longRunning ? 'Não feche nem atualize esta página. O conteúdo completo é gerado e validado em várias etapas e pode levar alguns minutos.' : 'Não feche nem atualize esta página. Ao concluir, o Admin abrirá o draft automaticamente. O limite de cada chamada ao provedor é de até 5 minutos.'}</small>
     </div></div>}
   </>;
 }
