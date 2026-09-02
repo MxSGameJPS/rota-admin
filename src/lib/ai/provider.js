@@ -27,13 +27,21 @@ function buildCaseNpcRules(context = {}) {
   const publishedNpcs = Array.isArray(context.publishedNpcs) ? context.publishedNpcs : [];
   return [
     'REGRA CRÍTICA SOBRE NPCs EM CASOS:',
-    '- Um caso NÃO cria NPCs persistentes. NPCs persistentes são criados e publicados separadamente no módulo de NPCs.',
-    '- Cliente, réu, testemunhas, familiares, empregados, vizinhos e outros personagens próprios daquele caso devem permanecer dentro do conteúdo do caso e NÃO devem ser colocados em content.npcAssignments.',
-    '- Por padrão, content.npcAssignments deve ser [].',
-    '- Use npcAssignments somente quando o caso realmente precisar de um NPC persistente já existente no universo, por exemplo juiz, desembargador, promotor, advogado anterior ou outro personagem recorrente.',
+    '- Antes de definir content.npcAssignments, ANALISE ATIVAMENTE o catálogo de NPCs persistentes publicados abaixo.',
+    '- Compare o caso planejado com roleType, profession, specialization, jurisdiction, professionalProfile e personality de cada NPC.',
+    '- Se existir NPC persistente que se encaixe NATURALMENTE em uma função recorrente do caso, REUTILIZE esse NPC em content.npcAssignments em vez de deixar o acervo sem uso.',
+    '- Exemplos de papéis normalmente apropriados para NPC persistente: juiz, desembargador, promotor, delegado, defensor, advogado recorrente, perito recorrente, mentor, servidor relevante ou outra figura institucional que possa reaparecer em outros casos.',
+    '- Cliente, réu, testemunhas, familiares, empregados, vizinhos e personagens exclusivos daquela história normalmente devem continuar como characters locais do próprio caso e NÃO devem ser promovidos artificialmente a NPC persistente.',
+    '- npcAssignments pode ficar [] SOMENTE quando nenhum NPC publicado tiver encaixe narrativo/profissional razoável. Não deixe vazio apenas por comodidade.',
+    '- Se dois ou mais NPCs forem igualmente adequados, prefira o de menor usageCount para distribuir melhor o elenco pelo jogo, salvo quando continuidade narrativa justificar reutilizar alguém mais frequente.',
+    '- usageCount indica em quantos vínculos de casos o NPC já foi utilizado. Zero significa NPC ainda não aproveitado em nenhum caso publicado/vinculado.',
     '- Quando usar npcAssignments, use SOMENTE npcSlug existente no catálogo publicado abaixo. Nunca invente nomes, slugs ou NPCs.',
+    '- Não force um NPC incompatível só para aumentar uso. Coerência jurídica e narrativa continua sendo prioridade.',
     '- Se o briefing exigir obrigatoriamente um NPC persistente/processual e nenhum NPC publicado abaixo for compatível, NÃO improvise. Retorne exatamente um JSON no formato {"__reject":"Explique qual NPC precisa existir antes deste caso ser criado."}.',
-    'CATÁLOGO DE NPCs PUBLICADOS DISPONÍVEIS:', JSON.stringify(publishedNpcs),
+    publishedNpcs.length
+      ? 'CATÁLOGO DE NPCs PUBLICADOS DISPONÍVEIS PARA AVALIAÇÃO:'
+      : 'CATÁLOGO DE NPCs PUBLICADOS: vazio. Não invente NPC persistente.',
+    JSON.stringify(publishedNpcs),
   ].join('\n');
 }
 
