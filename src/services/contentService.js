@@ -31,13 +31,23 @@ async function allocateUniqueCaseValue(client, column, desired) {
 
 export async function listPublishedNpcGenerationContext() {
   const client = requireClient();
-  const { data, error } = await client
-    .from('npcs')
-    .select('slug,name,role_type,profession,specialization,jurisdiction,professional_profile,personality')
-    .eq('status', 'published')
-    .eq('is_active', true)
-    .order('name');
+  const [{ data, error }, { data: relations, error: relationError }] = await Promise.all([
+    client
+      .from('npcs')
+      .select('id,slug,name,role_type,profession,specialization,jurisdiction,professional_profile,personality')
+      .eq('status', 'published')
+      .eq('is_active', true)
+      .order('name'),
+    client.from('case_npcs').select('npc_id'),
+  ]);
   if (error) throw error;
+  if (relationError) throw relationError;
+
+  const usageByNpcId = new Map();
+  for (const relation of relations || []) {
+    usageByNpcId.set(relation.npc_id, (usageByNpcId.get(relation.npc_id) || 0) + 1);
+  }
+
   return (data || []).map((npc) => ({
     slug: npc.slug,
     name: npc.name,
@@ -45,6 +55,7 @@ export async function listPublishedNpcGenerationContext() {
     profession: npc.profession,
     specialization: npc.specialization,
     jurisdiction: npc.jurisdiction,
+    usageCount: usageByNpcId.get(npc.id) || 0,
     professionalProfile: npc.professional_profile || {},
     personality: npc.personality || {},
   }));
