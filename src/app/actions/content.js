@@ -85,7 +85,7 @@ export async function regenerateCaseAction(formData) {
       'CASO ATUAL A SER REPARADO:',
       JSON.stringify(current),
     ].join('\n\n');
-    const generated = await generateStructured('case', repairPrompt, { publishedNpcs });
+    const generated = await generateStructured('case', repairPrompt, { publishedNpcs, repairCase: current });
     const parsed = ENTITY_SCHEMAS.case.parse({
       ...generated,
       id: current.id,

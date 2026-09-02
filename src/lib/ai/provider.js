@@ -120,27 +120,52 @@ function buildCasePlanSystem(context) {
   ].join('\n\n');
 }
 
-function buildLocationSystem(plan, skeleton) {
+function buildRepairPreservationContext(context = {}) {
+  const repairCase = context.repairCase;
+  if (!repairCase || typeof repairCase !== 'object') return null;
+  const content = repairCase.content || {};
+  const locations = Array.isArray(content.locations) ? content.locations : [];
+  return {
+    title: repairCase.title,
+    area: repairCase.area,
+    difficulty: repairCase.difficulty,
+    client: content.client,
+    briefing: content.briefing,
+    locations: locations.map(location => ({
+      id: location.id,
+      name: location.name,
+      characters: Array.isArray(location.characters) ? location.characters : [],
+    })),
+  };
+}
+
+function buildLocationSystem(plan, skeleton, context = {}) {
   const allLocations = plan.content.locations.map(item => ({ id: item.id, name: item.name, unlockedByDefault: item.unlockedByDefault }));
   const clues = plan.content.availableClues.map(item => ({ id: item.id, title: item.title, summary: item.summary, locationFoundId: item.locationFoundId, relevance: item.relevance }));
   const localClues = clues.filter(item => item.locationFoundId === skeleton.id);
+  const preservationContext = buildRepairPreservationContext(context);
   return [
     'Você está criando a ETAPA 2 de um caso jogável do Rota da Justiça: DETALHES DE UM ÚNICO LOCAL.',
     'Retorne SOMENTE JSON válido conforme o schema.',
     'Preserve exatamente id, name, category, travelTimeHours, travelCost, description, address, iconName, color, unlockedByDefault e requiredClueOrDialogToUnlock recebidos.',
     'Preencha characters e searchables de modo que o local tenha gameplay real.',
     'Personagens locais podem ser cliente, réu, testemunhas, funcionários, familiares etc. Eles NÃO são NPCs persistentes.',
+    `REGRA CRÍTICA DE IDs: todos os IDs NOVOS criados dentro deste local para personagens, diálogos e searchables devem começar com o prefixo "${skeleton.id}-". Não use IDs genéricos como character-1, dialogue-1 ou searchable-1.`,
+    'Dentro deste local, nenhum ID pode se repetir.',
     'revealsClueId e foundClueId só podem usar IDs da lista de pistas fornecida.',
     'unlocksLocationId só pode usar IDs da lista de locais fornecida.',
     'As pistas cujo locationFoundId é este local devem ser efetivamente descobríveis por diálogo ou searchable sempre que isso fizer sentido.',
     'Evite criar diálogos longos demais; 1 a 3 personagens e 1 a 3 interações relevantes são suficientes na maioria dos locais.',
+    preservationContext ? 'ESTE É UM REPARO DE CASO EXISTENTE: preserve os personagens centrais, seus nomes, papéis e relações narrativas, além do sentido das interações e diálogos originais sempre que forem compatíveis com o novo contrato. IDs antigos não precisam ser preservados.' : '',
+    preservationContext ? 'CONTEXTO NARRATIVO ORIGINAL A PRESERVAR:' : '',
+    preservationContext ? JSON.stringify(preservationContext) : '',
     'CASO:', JSON.stringify({ title: plan.title, area: plan.area, difficulty: plan.difficulty, client: plan.content.client, briefing: plan.content.briefing }),
     'LOCAL FIXO:', JSON.stringify(skeleton),
     'TODOS OS LOCAIS:', JSON.stringify(allLocations),
     'TODAS AS PISTAS:', JSON.stringify(clues),
     'PISTAS DESTE LOCAL:', JSON.stringify(localClues),
     'JSON Schema obrigatório:', JSON.stringify(CASE_LOCATION_SCHEMA_JSON),
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 async function generateCaseStructured(prompt, context) {
@@ -155,9 +180,9 @@ async function generateCaseStructured(prompt, context) {
   const detailedLocations = [];
   for (const skeleton of plan.content.locations) {
     const rawLocation = await requestParsedJson({
-      systemPrompt: buildLocationSystem(plan, skeleton),
-      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}).`,
-      retryHint: 'Reduza a quantidade de diálogos, não a estrutura obrigatória.',
+      systemPrompt: buildLocationSystem(plan, skeleton, context),
+      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-.`,
+      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-.`,
     });
     const parsedLocation = caseLocationDetailSchema.parse(rawLocation);
     detailedLocations.push({
