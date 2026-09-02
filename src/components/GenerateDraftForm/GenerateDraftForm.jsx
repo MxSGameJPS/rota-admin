@@ -26,7 +26,13 @@ export default function GenerateDraftForm({ action, placeholder, buttonLabel = '
   function handleSubmit() { flushSync(() => setSubmitting(true)); }
   return <>
     <form className={styles.form} action={action} onSubmit={handleSubmit}>
-      <textarea name="prompt" placeholder={placeholder} required disabled={submitting}/>
+      <textarea
+        name="prompt"
+        placeholder={placeholder}
+        required
+        readOnly={submitting}
+        aria-readonly={submitting}
+      />
       <button className={styles.primary} disabled={submitting} aria-busy={submitting}>{submitting ? <><span className={styles.spinner} aria-hidden="true"/>Gerando {entityLabel}…</> : buttonLabel}</button>
     </form>
     {submitting && <div className={styles.overlay} role="status" aria-live="assertive" aria-busy="true"><div className={styles.overlayCard}>
