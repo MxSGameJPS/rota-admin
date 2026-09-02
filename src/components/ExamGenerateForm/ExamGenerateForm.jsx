@@ -53,7 +53,12 @@ export default function ExamGenerateForm({ action }) {
       <div className={styles.grid}>
         <label>
           <span>Tipo de avaliação</span>
-          <select name="examType" value={examType} onChange={(event) => setExamType(event.target.value)} disabled={submitting}>
+          <select
+            name="examType"
+            value={examType}
+            onChange={(event) => { if (!submitting) setExamType(event.target.value); }}
+            aria-disabled={submitting}
+          >
             {Object.entries(PRESETS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
           </select>
         </label>
@@ -65,27 +70,56 @@ export default function ExamGenerateForm({ action }) {
 
         {preset.levels && <label>
           <span>Nível-alvo</span>
-          <select name="targetLevel" value={targetLevel} onChange={(event) => setTargetLevel(Number(event.target.value))} disabled={submitting}>
+          <select
+            name="targetLevel"
+            value={targetLevel}
+            onChange={(event) => { if (!submitting) setTargetLevel(Number(event.target.value)); }}
+            aria-disabled={submitting}
+          >
             {[1,2,3,4,5].map(level => <option key={level} value={level}>Nível {level}</option>)}
           </select>
         </label>}
 
         <label>
           <span>Nota de corte (acertos)</span>
-          <input name="passingScore" type="number" min="1" max={preset.questions} value={passingScore} onChange={(event) => setPassingScore(event.target.value)} required disabled={submitting || examType === 'oab_first_phase'}/>
-          {examType === 'oab_first_phase' && <input type="hidden" name="passingScore" value="40"/>}
+          <input
+            name="passingScore"
+            type="number"
+            min="1"
+            max={preset.questions}
+            value={passingScore}
+            onChange={(event) => { if (!submitting && examType !== 'oab_first_phase') setPassingScore(event.target.value); }}
+            required
+            readOnly={submitting || examType === 'oab_first_phase'}
+            aria-readonly={submitting || examType === 'oab_first_phase'}
+          />
         </label>
 
         <label>
           <span>Duração (minutos)</span>
-          <input name="durationMinutes" type="number" min="15" max="600" value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.value)} required disabled={submitting || examType === 'oab_first_phase'}/>
-          {examType === 'oab_first_phase' && <input type="hidden" name="durationMinutes" value="300"/>}
+          <input
+            name="durationMinutes"
+            type="number"
+            min="15"
+            max="600"
+            value={durationMinutes}
+            onChange={(event) => { if (!submitting && examType !== 'oab_first_phase') setDurationMinutes(event.target.value); }}
+            required
+            readOnly={submitting || examType === 'oab_first_phase'}
+            aria-readonly={submitting || examType === 'oab_first_phase'}
+          />
         </label>
       </div>
 
       <label className={styles.promptLabel}>
         <span>Briefing para a IA</span>
-        <textarea name="prompt" required disabled={submitting} placeholder="Ex.: Crie uma prova de Mestrado nível 2 focada em Direito Constitucional, teoria dos direitos fundamentais e pesquisa jurisprudencial, com questões originais e nível acadêmico elevado."/>
+        <textarea
+          name="prompt"
+          required
+          readOnly={submitting}
+          aria-readonly={submitting}
+          placeholder="Ex.: Crie uma prova de Mestrado nível 2 focada em Direito Constitucional, teoria dos direitos fundamentais e pesquisa jurisprudencial, com questões originais e nível acadêmico elevado."
+        />
       </label>
 
       <div className={styles.hint}>
