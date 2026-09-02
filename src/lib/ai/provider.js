@@ -4,6 +4,24 @@ import { generateTemplate } from './templates';
 import { generateWithDefaultProvider } from '@/services/ai/providerService';
 
 const STRUCTURED_GENERATION_TIMEOUT_MS = 300000;
+const OPTIONAL_CASE_REFERENCE_KEYS = new Set([
+  'requiredClueOrDialogToUnlock',
+  'revealsClueId',
+  'unlocksLocationId',
+  'foundClueId',
+]);
+
+function normalizeCaseOptionalReferences(value) {
+  if (Array.isArray(value)) return value.map(normalizeCaseOptionalReferences);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, child]) => {
+      if (OPTIONAL_CASE_REFERENCE_KEYS.has(key) && typeof child === 'string' && child.trim() === '') return [];
+      return [[key, normalizeCaseOptionalReferences(child)]];
+    }),
+  );
+}
 
 function buildCaseNpcRules(context = {}) {
   const publishedNpcs = Array.isArray(context.publishedNpcs) ? context.publishedNpcs : [];
@@ -113,6 +131,7 @@ function buildCasePlanSystem(context) {
     'Cada pista deve usar locationFoundId de um dos locais criados.',
     'Cada estratégia deve referenciar somente IDs de pistas existentes.',
     'Se um local começar bloqueado, requiredClueOrDialogToUnlock deve apontar SOMENTE para uma pista existente nesta etapa.',
+    'Se unlockedByDefault for true, OMITA requiredClueOrDialogToUnlock. Nunca envie string vazia e nunca envie null para campos opcionais de referência.',
     'Use chaves exatamente como definidas no schema; nunca traduza chaves para português.',
     'Seja narrativamente rico, porém conciso: detalhes de interação serão criados na etapa 2.',
     buildCaseNpcRules(context),
@@ -154,6 +173,7 @@ function buildLocationSystem(plan, skeleton, context = {}) {
     'Dentro deste local, nenhum ID pode se repetir.',
     'revealsClueId e foundClueId só podem usar IDs da lista de pistas fornecida.',
     'unlocksLocationId só pode usar IDs da lista de locais fornecida.',
+    'Campos opcionais de referência sem valor devem ser OMITIDOS. Nunca use "" e nunca use null em requiredClueOrDialogToUnlock, revealsClueId, unlocksLocationId ou foundClueId.',
     'As pistas cujo locationFoundId é este local devem ser efetivamente descobríveis por diálogo ou searchable sempre que isso fizer sentido.',
     'Evite criar diálogos longos demais; 1 a 3 personagens e 1 a 3 interações relevantes são suficientes na maioria dos locais.',
     preservationContext ? 'ESTE É UM REPARO DE CASO EXISTENTE: preserve os personagens centrais, seus nomes, papéis e relações narrativas, além do sentido das interações e diálogos originais sempre que forem compatíveis com o novo contrato. IDs antigos não precisam ser preservados.' : '',
@@ -172,19 +192,19 @@ async function generateCaseStructured(prompt, context) {
   const rawPlan = await requestParsedJson({
     systemPrompt: buildCasePlanSystem(context),
     prompt,
-    retryHint: 'Na repetição, mantenha no máximo 4 locais e 8 pistas se o briefing não exigir mais.',
+    retryHint: 'Na repetição, mantenha no máximo 4 locais e 8 pistas se o briefing não exigir mais. Omita referências opcionais sem valor em vez de usar string vazia ou null.',
   });
   if (typeof rawPlan?.__reject === 'string') throw new Error(`Caso não criado: ${rawPlan.__reject}`);
-  const plan = casePlanSchema.parse(rawPlan);
+  const plan = casePlanSchema.parse(normalizeCaseOptionalReferences(rawPlan));
 
   const detailedLocations = [];
   for (const skeleton of plan.content.locations) {
     const rawLocation = await requestParsedJson({
       systemPrompt: buildLocationSystem(plan, skeleton, context),
-      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-.`,
-      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-.`,
+      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-. Omita campos opcionais de referência que não tenham valor.`,
+      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-. Nunca use string vazia ou null em referências opcionais.`,
     });
-    const parsedLocation = caseLocationDetailSchema.parse(rawLocation);
+    const parsedLocation = caseLocationDetailSchema.parse(normalizeCaseOptionalReferences(rawLocation));
     detailedLocations.push({
       ...parsedLocation,
       ...skeleton,
@@ -193,14 +213,14 @@ async function generateCaseStructured(prompt, context) {
     });
   }
 
-  return caseSchema.parse({
+  return caseSchema.parse(normalizeCaseOptionalReferences({
     ...plan,
     status: 'draft',
     content: {
       ...plan.content,
       locations: detailedLocations,
     },
-  });
+  }));
 }
 
 export async function generateStructured(entityType, prompt, context = {}) {
