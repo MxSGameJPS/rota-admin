@@ -1,4 +1,5 @@
-import { getAIContract } from '@/schemas/contracts';
+import { getAIContract, caseSchema } from '@/schemas/contracts';
+import { casePlanSchema, caseLocationDetailSchema, CASE_PLAN_SCHEMA_JSON, CASE_LOCATION_SCHEMA_JSON } from '@/schemas/caseGeneration';
 import { generateTemplate } from './templates';
 import { generateWithDefaultProvider } from '@/services/ai/providerService';
 
@@ -70,15 +71,123 @@ function parseStructuredText(text) {
   try { return JSON.parse(withoutFence); } catch {}
   const first = withoutFence.indexOf('{'); const last = withoutFence.lastIndexOf('}');
   if (first >= 0 && last > first) { try { return JSON.parse(withoutFence.slice(first, last + 1)); } catch {} }
-  throw new Error('A IA respondeu, mas não retornou um JSON válido compatível com o Rota.');
+  throw new Error('INVALID_JSON');
+}
+
+async function requestParsedJson({ systemPrompt, prompt, retryHint }) {
+  const run = async (extra = '') => {
+    const result = await generateWithDefaultProvider({
+      prompt,
+      systemPrompt: [systemPrompt, extra].filter(Boolean).join('\n\n'),
+      timeoutMs: STRUCTURED_GENERATION_TIMEOUT_MS,
+    });
+    return parseStructuredText(result.text);
+  };
+
+  try {
+    return await run();
+  } catch (error) {
+    if (String(error?.message || '') !== 'INVALID_JSON') throw error;
+    try {
+      return await run([
+        'ATENÇÃO: a resposta anterior não formou JSON válido, possivelmente por excesso de texto ou truncamento.',
+        'Tente novamente do zero. Seja mais conciso nos textos narrativos, mas NÃO omita campos obrigatórios.',
+        'Feche corretamente todos os objetos e arrays. Retorne somente JSON.',
+        retryHint || '',
+      ].filter(Boolean).join('\n'));
+    } catch (retryError) {
+      if (String(retryError?.message || '') === 'INVALID_JSON') {
+        throw new Error('A IA respondeu duas vezes, mas o JSON ficou incompleto. O Admin dividiu a geração em etapas; se persistir, aumente o limite de tokens do provider em Configurações → Inteligência Artificial.');
+      }
+      throw retryError;
+    }
+  }
+}
+
+function buildCasePlanSystem(context) {
+  return [
+    'Você está criando a ETAPA 1 de um caso jogável do Rota da Justiça: o PLANO ESTRUTURAL.',
+    'Retorne SOMENTE JSON válido conforme o schema abaixo.',
+    'NÃO crie personagens, diálogos ou searchables nesta etapa; o schema desta etapa não contém esses campos.',
+    'Crie entre 2 e 6 locais, entre 4 e 12 pistas e entre 2 e 5 estratégias. Prefira quantidade proporcional à dificuldade.',
+    'Cada pista deve usar locationFoundId de um dos locais criados.',
+    'Cada estratégia deve referenciar somente IDs de pistas existentes.',
+    'Se um local começar bloqueado, requiredClueOrDialogToUnlock deve apontar SOMENTE para uma pista existente nesta etapa.',
+    'Use chaves exatamente como definidas no schema; nunca traduza chaves para português.',
+    'Seja narrativamente rico, porém conciso: detalhes de interação serão criados na etapa 2.',
+    buildCaseNpcRules(context),
+    'JSON Schema obrigatório para o plano:', JSON.stringify(CASE_PLAN_SCHEMA_JSON),
+  ].join('\n\n');
+}
+
+function buildLocationSystem(plan, skeleton) {
+  const allLocations = plan.content.locations.map(item => ({ id: item.id, name: item.name, unlockedByDefault: item.unlockedByDefault }));
+  const clues = plan.content.availableClues.map(item => ({ id: item.id, title: item.title, summary: item.summary, locationFoundId: item.locationFoundId, relevance: item.relevance }));
+  const localClues = clues.filter(item => item.locationFoundId === skeleton.id);
+  return [
+    'Você está criando a ETAPA 2 de um caso jogável do Rota da Justiça: DETALHES DE UM ÚNICO LOCAL.',
+    'Retorne SOMENTE JSON válido conforme o schema.',
+    'Preserve exatamente id, name, category, travelTimeHours, travelCost, description, address, iconName, color, unlockedByDefault e requiredClueOrDialogToUnlock recebidos.',
+    'Preencha characters e searchables de modo que o local tenha gameplay real.',
+    'Personagens locais podem ser cliente, réu, testemunhas, funcionários, familiares etc. Eles NÃO são NPCs persistentes.',
+    'revealsClueId e foundClueId só podem usar IDs da lista de pistas fornecida.',
+    'unlocksLocationId só pode usar IDs da lista de locais fornecida.',
+    'As pistas cujo locationFoundId é este local devem ser efetivamente descobríveis por diálogo ou searchable sempre que isso fizer sentido.',
+    'Evite criar diálogos longos demais; 1 a 3 personagens e 1 a 3 interações relevantes são suficientes na maioria dos locais.',
+    'CASO:', JSON.stringify({ title: plan.title, area: plan.area, difficulty: plan.difficulty, client: plan.content.client, briefing: plan.content.briefing }),
+    'LOCAL FIXO:', JSON.stringify(skeleton),
+    'TODOS OS LOCAIS:', JSON.stringify(allLocations),
+    'TODAS AS PISTAS:', JSON.stringify(clues),
+    'PISTAS DESTE LOCAL:', JSON.stringify(localClues),
+    'JSON Schema obrigatório:', JSON.stringify(CASE_LOCATION_SCHEMA_JSON),
+  ].join('\n\n');
+}
+
+async function generateCaseStructured(prompt, context) {
+  const rawPlan = await requestParsedJson({
+    systemPrompt: buildCasePlanSystem(context),
+    prompt,
+    retryHint: 'Na repetição, mantenha no máximo 4 locais e 8 pistas se o briefing não exigir mais.',
+  });
+  if (typeof rawPlan?.__reject === 'string') throw new Error(`Caso não criado: ${rawPlan.__reject}`);
+  const plan = casePlanSchema.parse(rawPlan);
+
+  const detailedLocations = [];
+  for (const skeleton of plan.content.locations) {
+    const rawLocation = await requestParsedJson({
+      systemPrompt: buildLocationSystem(plan, skeleton),
+      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}).`,
+      retryHint: 'Reduza a quantidade de diálogos, não a estrutura obrigatória.',
+    });
+    const parsedLocation = caseLocationDetailSchema.parse(rawLocation);
+    detailedLocations.push({
+      ...parsedLocation,
+      ...skeleton,
+      characters: parsedLocation.characters,
+      searchables: parsedLocation.searchables,
+    });
+  }
+
+  return caseSchema.parse({
+    ...plan,
+    status: 'draft',
+    content: {
+      ...plan.content,
+      locations: detailedLocations,
+    },
+  });
 }
 
 export async function generateStructured(entityType, prompt, context = {}) {
-  const contract = getAIContract(entityType);
   try {
-    const result = await generateWithDefaultProvider({ prompt, systemPrompt: buildSystemPrompt(contract, entityType, context), timeoutMs: STRUCTURED_GENERATION_TIMEOUT_MS });
-    const parsed = parseStructuredText(result.text);
-    if (entityType === 'case' && typeof parsed?.__reject === 'string') throw new Error(`Caso não criado: ${parsed.__reject}`);
+    if (entityType === 'case') return await generateCaseStructured(prompt, context);
+
+    const contract = getAIContract(entityType);
+    const parsed = await requestParsedJson({
+      prompt,
+      systemPrompt: buildSystemPrompt(contract, entityType, context),
+      retryHint: 'Mantenha todos os campos do schema e reduza apenas texto ornamental.',
+    });
     return parsed;
   } catch (error) {
     if (String(error?.message || '').includes('Nenhum provedor de IA ativo')) {
