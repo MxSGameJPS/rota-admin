@@ -4,7 +4,20 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { generateStructured } from '@/lib/ai/provider';
 import { ENTITY_SCHEMAS } from '@/schemas/contracts';
-import { createDraft, publishEntity, updateDraft, createCurrency, createReward, publishReward, activateFeature, saveSetting, listPublishedNpcGenerationContext, validateCaseNpcAssignments } from '@/services/contentService';
+import {
+  createDraft,
+  publishEntity,
+  updateDraft,
+  createCurrency,
+  createReward,
+  publishReward,
+  activateFeature,
+  saveSetting,
+  listPublishedNpcGenerationContext,
+  validateCaseNpcAssignments,
+  getEntityForEditor,
+} from '@/services/contentService';
+import { deleteCasePermanently, replaceCaseWithRegeneratedDraft } from '@/services/caseMaintenanceService';
 
 const routeByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const detailByType = { case: '/cases', npc: '/npcs', item: '/shop' };
@@ -43,9 +56,61 @@ export async function updateJsonAction(entityType, formData) {
 
 export async function publishAction(entityType, formData) {
   const id = String(formData.get('id') || '');
-  try { await publishEntity(entityType, id); revalidatePath(routeByType[entityType]); }
-  catch (error) { fail(`${detailByType[entityType]}/${id}`, error.message || 'Falha ao publicar.'); }
+  try {
+    const current = await getEntityForEditor(entityType, id);
+    const candidate = entityType === 'npc' ? (() => { const copy = { ...current }; delete copy.id; return copy; })() : current;
+    const parsed = ENTITY_SCHEMAS[entityType].parse(candidate);
+    if (entityType === 'case') await validateCaseNpcAssignments(parsed.content);
+    await publishEntity(entityType, id);
+    revalidatePath(routeByType[entityType]);
+  } catch (error) { fail(`${detailByType[entityType]}/${id}`, error.message || 'Falha ao publicar.'); }
   redirect(`${routeByType[entityType]}?published=1`);
+}
+
+export async function regenerateCaseAction(formData) {
+  const id = String(formData.get('id') || '').trim();
+  const route = `/cases/${id}`;
+  if (!id) fail('/cases', 'Caso inválido para regeneração.');
+  try {
+    const current = await getEntityForEditor('case', id);
+    const publishedNpcs = await listPublishedNpcGenerationContext();
+    const repairPrompt = [
+      'REGENERE E REPARE este caso existente do Rota da Justiça.',
+      'Preserve a premissa, os personagens centrais, a área, a dificuldade e a identidade narrativa sempre que possível.',
+      'Reconstrua completamente a estrutura para que seja jogável no motor atual.',
+      'Não traduza nomes de propriedades do schema para português.',
+      'Crie locais investigáveis, personagens locais, diálogos, pontos pesquisáveis, pistas e estratégias coerentes entre si.',
+      'Todos os IDs e referências internas precisam existir e fechar corretamente.',
+      'O id e o code serão preservados pelo servidor; concentre-se em reparar o conteúdo.',
+      'CASO ATUAL A SER REPARADO:',
+      JSON.stringify(current),
+    ].join('\n\n');
+    const generated = await generateStructured('case', repairPrompt, { publishedNpcs });
+    const parsed = ENTITY_SCHEMAS.case.parse({
+      ...generated,
+      id: current.id,
+      code: current.code,
+      status: 'draft',
+    });
+    await validateCaseNpcAssignments(parsed.content);
+    const result = await replaceCaseWithRegeneratedDraft(id, parsed);
+    revalidatePath('/cases');
+    revalidatePath(route);
+    redirect(`${route}?regenerated=1&version=${result.version}`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error.message || 'Falha ao regenerar o caso com IA.');
+  }
+}
+
+export async function deleteCaseAction(formData) {
+  const id = String(formData.get('id') || '').trim();
+  if (!id) fail('/cases', 'Caso inválido para exclusão.');
+  try {
+    await deleteCasePermanently(id);
+    revalidatePath('/cases');
+  } catch (error) { fail(`/cases/${id}`, error.message || 'Falha ao excluir o caso.'); }
+  redirect('/cases?deleted=1');
 }
 
 export async function createCurrencyAction(formData) {
