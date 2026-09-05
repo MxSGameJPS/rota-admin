@@ -1,6 +1,24 @@
 import { generateCaseReactiveWorldAction } from '@/app/actions/reactiveWorld';
 import styles from '@/app/section.module.css';
 
+function ReactiveWorldForm({ model, advanced = false }) {
+  return <form className={styles.form} action={generateCaseReactiveWorldAction}>
+    <input type="hidden" name="id" value={model.id}/>
+    <label htmlFor={`reactive-prompt-${model.id}`}>Orientação opcional para a IA</label>
+    <textarea
+      id={`reactive-prompt-${model.id}`}
+      name="prompt"
+      placeholder="Ex.: dê mais peso à contradição do recibo, faça a testemunha Maria recuar perto do protocolo e crie audiência com impugnação desse documento."
+    />
+    <button className={styles.primary}>
+      {advanced ? 'Regenerar mundo reativo com IA' : 'Gerar intercorrências e audiência com IA'}
+    </button>
+    <p>
+      Funciona tanto em draft quanto em caso já publicado. Em caso publicado, o Admin preserva a versão anterior e a alteração segue o fluxo de revisão.
+    </p>
+  </form>;
+}
+
 export default function CaseReactiveWorldPanel({ model }) {
   const config = model.metadata?.reactiveWorld || null;
   const events = Array.isArray(config?.events) ? config.events : [];
@@ -29,26 +47,22 @@ export default function CaseReactiveWorldPanel({ model }) {
       </div>)}
     </div>}
 
-    {config?.hearing && <div className={styles.warningList}>
-      <strong>{config.hearing.title || 'Audiência de instrução'}</strong>
-      <div>{config.hearing.intro}</div>
-      <div>{rounds.length} etapa(s): {rounds.map((round) => round.title).join(' • ')}</div>
+    {config?.hearing && <div className={styles.assetList}>
+      <div className={styles.assetRow}>
+        <div>
+          <strong>{config.hearing.title || 'Audiência de instrução'}</strong>
+          <span>{config.hearing.intro}</span>
+          <span>{rounds.length} etapa(s): {rounds.map((round) => round.title).join(' • ')}</span>
+        </div>
+      </div>
     </div>}
 
-    <form className={styles.form} action={generateCaseReactiveWorldAction}>
-      <input type="hidden" name="id" value={model.id}/>
-      <label htmlFor={`reactive-prompt-${model.id}`}>Orientação opcional para a IA</label>
-      <textarea
-        id={`reactive-prompt-${model.id}`}
-        name="prompt"
-        placeholder="Ex.: dê mais peso à contradição do recibo, faça a testemunha Maria recuar perto do protocolo e crie audiência com impugnação desse documento."
-      />
-      <button className={styles.primary}>
-        {hasCustomConfig ? 'Regenerar mundo reativo com IA' : 'Gerar intercorrências e audiência com IA'}
-      </button>
-      <p>
-        Funciona tanto em draft quanto em caso já publicado. Em caso publicado, o Admin cria snapshot da versão anterior antes de atualizar somente esta configuração.
-      </p>
-    </form>
+    {!hasCustomConfig && <ReactiveWorldForm model={model} />}
+
+    {hasCustomConfig && <details className={styles.advancedDetails}>
+      <summary>Ações avançadas de regeneração</summary>
+      <p>O mundo reativo já está configurado e saudável. Abra esta área somente se quiser substituir editorialmente intercorrências e audiência que já estão válidas.</p>
+      <ReactiveWorldForm model={model} advanced />
+    </details>}
   </section>;
 }
