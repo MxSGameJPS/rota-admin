@@ -7,6 +7,7 @@ import {
 
 const PORTRAIT_BUCKET = process.env.ROTA_PORTRAIT_BUCKET?.trim() || 'character-portraits';
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const PORTRAIT_ATTEMPTS = Math.max(1, Math.min(4, Number(process.env.ROTA_PORTRAIT_ATTEMPTS || 3)));
 let readyBucketKey = '';
 
 function requireClient() {
@@ -25,11 +26,48 @@ function slugify(value) {
     .slice(0, 90) || 'personagem';
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function isAlreadyExistsError(error) {
   const message = String(error?.message || error?.error || '').toLowerCase();
   return Number(error?.statusCode || error?.status) === 409
     || message.includes('already exists')
     || message.includes('duplicate');
+}
+
+function isRetryablePortraitError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return /http\s+(429|500|502|503|504)\b/.test(message)
+    || message.includes('timeout')
+    || message.includes('tempo limite')
+    || message.includes('socket')
+    || message.includes('econnreset')
+    || message.includes('fetch failed')
+    || message.includes('network')
+    || message.includes('temporar')
+    || message.includes('overloaded')
+    || message.includes('rate limit')
+    || message.includes('image_generation_call')
+    || message.includes('without producing an image');
+}
+
+async function generatePortraitImage(prompt) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= PORTRAIT_ATTEMPTS; attempt += 1) {
+    try {
+      const retryPrompt = attempt === 1
+        ? prompt
+        : `${prompt}\n\nIMPORTANTE: gere efetivamente a imagem solicitada agora. Não responda apenas em texto e não omita a chamada de geração de imagem.`;
+      return await generateImageWithDefaultProvider({ prompt: retryPrompt, n: 1 });
+    } catch (error) {
+      lastError = error;
+      if (!isRetryablePortraitError(error) || attempt === PORTRAIT_ATTEMPTS) throw error;
+      await sleep(Math.min(5000, 900 * attempt));
+    }
+  }
+  throw lastError || new Error('Falha desconhecida ao gerar retrato.');
 }
 
 async function ensurePortraitBucket() {
@@ -132,7 +170,7 @@ export async function storeGeneratedPortrait({ source, folder, slug }) {
 }
 
 export async function generateAndStorePortrait({ prompt, folder, slug }) {
-  const generated = await generateImageWithDefaultProvider({ prompt, n: 1 });
+  const generated = await generatePortraitImage(prompt);
   const stored = await storeGeneratedPortrait({ source: generated.source, folder, slug });
   return {
     ...stored,
