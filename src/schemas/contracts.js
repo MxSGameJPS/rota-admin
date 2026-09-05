@@ -16,6 +16,34 @@ const careerTierSchema = z.enum([
   'MINISTRO_STF',
 ]);
 
+const npcRoleTypeSchema = z.enum([
+  'juiz',
+  'desembargador',
+  'promotor',
+  'procurador',
+  'advogado',
+  'defensor',
+  'delegado',
+  'investigador',
+  'perito',
+  'oficial_justica',
+  'servidor',
+  'oab',
+  'cliente',
+  'testemunha',
+  'outro',
+]);
+
+const appearanceProfileSchema = z.object({
+  genderPresentation: z.string().min(2),
+  ageRange: z.string().min(2),
+  skinTone: z.string().min(2),
+  hair: z.string().min(2),
+  clothing: z.string().min(2),
+  expression: z.string().min(2),
+  notes: z.string().default(''),
+});
+
 const clueSchema = z.object({
   id: z.string().min(2),
   title: z.string().min(3),
@@ -46,6 +74,10 @@ const characterSchema = z.object({
   role: z.string().min(2),
   avatarIcon: z.string().min(2),
   avatarBg: z.string().min(2),
+  appearanceProfile: appearanceProfileSchema.optional(),
+  portraitSrc: z.string().min(2).optional(),
+  portraitStoragePath: z.string().min(2).optional(),
+  portraitGeneratedAt: z.string().min(10).optional(),
   initialDialogue: z.string().min(3),
   dialogueOptions: z.array(dialogueOptionSchema).default([]),
 });
@@ -87,6 +119,25 @@ const legalStrategySchema = z.object({
   rationale: z.string().min(5),
 });
 
+const npcAssignmentSchema = z.object({
+  npcSlug: z.string().min(2),
+  roleInCase: z.string().min(2),
+  isRequired: z.boolean().default(false),
+  sortOrder: z.number().int().default(0),
+  configuration: z.record(z.string(), z.unknown()).default({}),
+});
+
+const npcNeedSchema = z.object({
+  roleType: npcRoleTypeSchema,
+  profession: z.string().min(2),
+  specialization: z.string().min(2),
+  jurisdiction: z.string().default(''),
+  roleInCase: z.string().min(2),
+  locationId: z.string().min(2),
+  reason: z.string().min(5),
+  isRequired: z.boolean().default(true),
+});
+
 const caseContentSchema = z.object({
   client: z.object({
     name: z.string().min(2),
@@ -104,13 +155,8 @@ const caseContentSchema = z.object({
   locations: z.array(locationSchema).min(1),
   availableClues: z.array(clueSchema).min(1),
   strategies: z.array(legalStrategySchema).min(1),
-  npcAssignments: z.array(z.object({
-    npcSlug: z.string().min(2),
-    roleInCase: z.string().min(2),
-    isRequired: z.boolean().default(false),
-    sortOrder: z.number().int().default(0),
-    configuration: z.record(z.string(), z.unknown()).default({}),
-  })).default([]),
+  npcAssignments: z.array(npcAssignmentSchema).default([]),
+  npcNeeds: z.array(npcNeedSchema).default([]),
   socialJuridicoTools: z.array(z.record(z.string(), z.unknown())).default([]),
   minimumPassingScore: z.number().int().min(0).max(100).default(70),
 }).superRefine((content, ctx) => {
@@ -175,11 +221,20 @@ const caseContentSchema = z.object({
       if (!clueIds.has(clueId)) ctx.addIssue({ code: 'custom', path: ['strategies', strategyIndex, 'incompatibleClueIds'], message: `A estratégia ${strategy.id} referencia pista incompatível inexistente: ${clueId}.` });
     }
   }
+
+  for (const [index, need] of content.npcNeeds.entries()) {
+    if (!locationIds.has(need.locationId)) ctx.addIssue({ code: 'custom', path: ['npcNeeds', index, 'locationId'], message: `A necessidade de NPC aponta para local inexistente: ${need.locationId}.` });
+  }
+
+  for (const [index, assignment] of content.npcAssignments.entries()) {
+    const locationId = typeof assignment.configuration?.locationId === 'string' ? assignment.configuration.locationId.trim() : '';
+    if (locationId && !locationIds.has(locationId)) ctx.addIssue({ code: 'custom', path: ['npcAssignments', index, 'configuration', 'locationId'], message: `O NPC ${assignment.npcSlug} aponta para local inexistente: ${locationId}.` });
+  }
 });
 
 export const npcSchema = z.object({
   name: z.string().min(2), slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
-  roleType: z.enum(['juiz', 'desembargador', 'promotor', 'procurador', 'advogado', 'delegado', 'perito', 'cliente', 'testemunha', 'servidor', 'outro']),
+  roleType: npcRoleTypeSchema,
   profession: z.string().min(2), specialization: z.string().min(2), jurisdiction: z.string().default(''),
   professionalProfile: z.object({ yearsExperience: z.number().int().min(0).default(0), background: z.string().min(10), proceduralStyle: z.string().min(5), priorities: z.array(z.string()).default([]) }),
   personality: z.object({ formalism: score, evidenceRigor: score, urgencySensitivity: score, conciliationOpenness: score, proceduralErrorTolerance: score, innovationOpenness: score }),
@@ -281,8 +336,8 @@ export const examDraftSchema = examBaseSchema.extend({ questions: z.array(examQu
 export const ENTITY_SCHEMAS = { npc: npcSchema, case: caseSchema, item: catalogItemSchema, exam: examSchema, examQuestionBatch: examQuestionBatchSchema };
 
 export const AI_INSTRUCTIONS = {
-  npc: 'Crie um NPC completo e coerente. Memórias, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir a personalidade e a função jurídica. Nunca omita os campos obrigatórios.',
-  case: `Crie um caso COMPLETAMENTE JOGÁVEL no motor atual do Rota da Justiça. O JSON Schema é o contrato de runtime, não apenas um formato editorial. Use EXATAMENTE os nomes de propriedades do schema, em camelCase e em inglês quando definidos: client.name/occupation/summary/avatarBg; briefing.mentorName/mentorQuote/facts/mainObjective/legalContext; locations com id/name/category/travelTimeHours/travelCost/description/address/iconName/color/unlockedByDefault/characters/searchables; characters com dialogueOptions; availableClues com title/type/relevance/isAuthentic/summary/fullDetail/locationFoundId/legalSignificance/iconName; strategies com title/branch/description/isOptimal/scoreWeight/requiredCrucialClueIds/rationale. NUNCA traduza nomes de chaves para português (não use nome, profissao, resumo, descricao, passos, provas_necessarias etc.). Todos os IDs referenciados precisam existir no próprio caso. Crie locais investigáveis de verdade, com personagens locais, diálogos e/ou searchables suficientes para o jogador descobrir as pistas. Personagens próprios do caso, como cliente, réu, testemunhas, familiares e funcionários, ficam dentro de locations.characters e NÃO são NPCs persistentes. Por padrão npcAssignments deve ser vazio. Só use npcAssignments quando o caso exigir um NPC persistente já publicado no universo, usando exclusivamente o slug fornecido pelo catálogo do Admin; nunca invente um NPC. Se o caso exigir obrigatoriamente um NPC persistente e nenhum disponível for compatível, recuse a geração conforme a instrução do provider. Ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.`,
+  npc: 'Crie um NPC persistente completo, coerente e reutilizável em vários casos. Memórias-base, diálogos, conhecimento, relacionamentos e regras de decisão devem refletir personalidade e função jurídica, mas não devem depender de fatos exclusivos de um único processo. Em metadata inclua appearanceProfile com genderPresentation, ageRange, skinTone, hair, clothing, expression e notes para permitir a geração consistente do retrato. Varie aparência, idade, traços, cabelo e vestimenta para que o elenco não pareça formado pelo mesmo personagem com roupas diferentes. Nunca omita os campos obrigatórios.',
+  case: `Crie um caso COMPLETAMENTE JOGÁVEL no motor atual do Rota da Justiça. O JSON Schema é o contrato de runtime, não apenas um formato editorial. Use EXATAMENTE os nomes de propriedades do schema, em camelCase e em inglês quando definidos: client.name/occupation/summary/avatarBg; briefing.mentorName/mentorQuote/facts/mainObjective/legalContext; locations com id/name/category/travelTimeHours/travelCost/description/address/iconName/color/unlockedByDefault/characters/searchables; characters com appearanceProfile e dialogueOptions; availableClues com title/type/relevance/isAuthentic/summary/fullDetail/locationFoundId/legalSignificance/iconName; strategies com title/branch/description/isOptimal/scoreWeight/requiredCrucialClueIds/rationale. NUNCA traduza nomes de chaves para português. Todos os IDs referenciados precisam existir no próprio caso. Crie locais investigáveis de verdade, com personagens locais, diálogos e/ou searchables suficientes para o jogador descobrir as pistas. Personagens próprios do caso, como cliente, réu, testemunhas, familiares e funcionários, ficam dentro de locations.characters e NÃO são NPCs persistentes. Todo personagem local conversável deve receber appearanceProfile visual detalhado para que o Admin gere seu retrato depois. Para figuras institucionais recorrentes use npcAssignments quando houver NPC publicado compatível; quando a função recorrente for necessária e nenhum NPC publicado for compatível, descreva a necessidade em npcNeeds para o Admin criar automaticamente um novo NPC draft, gerar seu retrato e vinculá-lo ao caso. Ferramentas Social Jurídico só aparecem quando fizerem sentido jurídico e gamificado.`,
   item: 'Crie item de jogo sem pay-to-win. Efeitos competitivos devem ser moderados e sempre depender de validação server-side.',
   exam: 'Crie os metadados de uma NOVA avaliação simulada do Rota da Justiça. Respeite integralmente o tipo, a quantidade de questões, o nível-alvo, a duração e o corte fornecidos pelo contexto. Nunca declare uma prova gerada por IA como oficial, real ou emitida por uma instituição pública.',
   examQuestionBatch: 'Crie somente as questões solicitadas no lote. Cada questão deve ser ORIGINAL, juridicamente plausível, objetiva, ter quatro alternativas A-D, uma única resposta correta e explicação. Respeite exatamente os números solicitados. Quando o contexto fixar uma área, use-a; quando a área vier livre, escolha uma área coerente com o tipo, nível e briefing da prova.',

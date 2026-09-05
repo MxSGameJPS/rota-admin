@@ -26,21 +26,23 @@ function normalizeCaseOptionalReferences(value) {
 function buildCaseNpcRules(context = {}) {
   const publishedNpcs = Array.isArray(context.publishedNpcs) ? context.publishedNpcs : [];
   return [
-    'REGRA CRÍTICA SOBRE NPCs EM CASOS:',
-    '- Antes de definir content.npcAssignments, ANALISE ATIVAMENTE o catálogo de NPCs persistentes publicados abaixo.',
+    'REGRA CRÍTICA SOBRE NPCs PERSISTENTES EM CASOS:',
+    '- Antes de definir content.npcAssignments ou content.npcNeeds, ANALISE ATIVAMENTE o catálogo de NPCs persistentes publicados abaixo.',
     '- Compare o caso planejado com roleType, profession, specialization, jurisdiction, professionalProfile e personality de cada NPC.',
-    '- Se existir NPC persistente que se encaixe NATURALMENTE em uma função recorrente do caso, REUTILIZE esse NPC em content.npcAssignments em vez de deixar o acervo sem uso.',
-    '- Exemplos de papéis normalmente apropriados para NPC persistente: juiz, desembargador, promotor, delegado, defensor, advogado recorrente, perito recorrente, mentor, servidor relevante ou outra figura institucional que possa reaparecer em outros casos.',
-    '- Cliente, réu, testemunhas, familiares, empregados, vizinhos e personagens exclusivos daquela história normalmente devem continuar como characters locais do próprio caso e NÃO devem ser promovidos artificialmente a NPC persistente.',
-    '- npcAssignments pode ficar [] SOMENTE quando nenhum NPC publicado tiver encaixe narrativo/profissional razoável. Não deixe vazio apenas por comodidade.',
-    '- Se dois ou mais NPCs forem igualmente adequados, prefira o de menor usageCount para distribuir melhor o elenco pelo jogo, salvo quando continuidade narrativa justificar reutilizar alguém mais frequente.',
-    '- usageCount indica em quantos vínculos de casos o NPC já foi utilizado. Zero significa NPC ainda não aproveitado em nenhum caso publicado/vinculado.',
-    '- Quando usar npcAssignments, use SOMENTE npcSlug existente no catálogo publicado abaixo. Nunca invente nomes, slugs ou NPCs.',
-    '- Não force um NPC incompatível só para aumentar uso. Coerência jurídica e narrativa continua sendo prioridade.',
-    '- Se o briefing exigir obrigatoriamente um NPC persistente/processual e nenhum NPC publicado abaixo for compatível, NÃO improvise. Retorne exatamente um JSON no formato {"__reject":"Explique qual NPC precisa existir antes deste caso ser criado."}.',
+    '- Se existir NPC persistente que se encaixe NATURALMENTE em uma função institucional/recorrente do caso, REUTILIZE esse NPC em content.npcAssignments.',
+    '- Todo npcAssignment deve indicar configuration.locationId com o ID EXATO de um local do próprio caso onde o NPC aparecerá.',
+    '- Sempre que possível, configuration também deve trazer initialDialogue e dialogueOptions específicos deste caso. Cada dialogueOption pode usar question, answer, timeCostMinutes e, somente quando coerente, revealsClueId ou unlocksLocationId existentes.',
+    '- Exemplos apropriados para NPC persistente: juiz, desembargador, promotor, procurador, delegado, investigador recorrente, defensor, perito, oficial de justiça, servidor relevante, representante da OAB ou outra figura institucional que possa reaparecer.',
+    '- Cliente, réu, vítima, suspeito, testemunhas, familiares, empregados, vizinhos e personagens exclusivos daquela história continuam como characters locais e NÃO devem virar NPC persistente.',
+    '- Se o caso NECESSITAR de uma figura institucional recorrente e NÃO existir NPC publicado realmente compatível, NÃO recuse o caso e NÃO invente um npcSlug. Preencha content.npcNeeds descrevendo exatamente o NPC que falta.',
+    '- Cada npcNeed deve conter roleType, profession, specialization, jurisdiction, roleInCase, locationId, reason e isRequired. locationId deve existir no caso.',
+    '- O Admin usará npcNeeds para criar automaticamente o NPC em draft, gerar seu retrato e vinculá-lo ao caso. Portanto use npcNeeds somente para funções genuinamente persistentes.',
+    '- Se dois ou mais NPCs existentes forem igualmente adequados, prefira o de menor usageCount para distribuir melhor o elenco, salvo quando continuidade narrativa justificar reutilizar alguém mais frequente.',
+    '- Quando usar npcAssignments, use SOMENTE npcSlug existente no catálogo publicado abaixo. Nunca invente slug em npcAssignments.',
+    '- Não force NPC incompatível só para evitar npcNeeds. Coerência jurídica e narrativa tem prioridade.',
     publishedNpcs.length
       ? 'CATÁLOGO DE NPCs PUBLICADOS DISPONÍVEIS PARA AVALIAÇÃO:'
-      : 'CATÁLOGO DE NPCs PUBLICADOS: vazio. Não invente NPC persistente.',
+      : 'CATÁLOGO DE NPCs PUBLICADOS: vazio. Se uma função persistente for necessária, use npcNeeds.',
     JSON.stringify(publishedNpcs),
   ].join('\n');
 }
@@ -84,7 +86,7 @@ function buildSystemPrompt(contract, entityType, context) {
   return [
     'Você é o gerador de conteúdo oficial do Rota da Justiça.',
     'Retorne SOMENTE JSON válido. Não use markdown, comentários ou texto fora do JSON.',
-    'Obedeça integralmente ao JSON Schema fornecido, exceto pelo formato especial __reject explicitamente autorizado nas regras de NPC de casos.',
+    'Obedeça integralmente ao JSON Schema fornecido.',
     contract.instructions, extraRules,
     'JSON Schema obrigatório:', JSON.stringify(contract.jsonSchema),
   ].filter(Boolean).join('\n\n');
@@ -134,7 +136,7 @@ function buildCasePlanSystem(context) {
   return [
     'Você está criando a ETAPA 1 de um caso jogável do Rota da Justiça: o PLANO ESTRUTURAL.',
     'Retorne SOMENTE JSON válido conforme o schema abaixo.',
-    'NÃO crie personagens, diálogos ou searchables nesta etapa; o schema desta etapa não contém esses campos.',
+    'NÃO crie characters, diálogos ou searchables nesta etapa; eles serão detalhados na etapa 2.',
     'Crie entre 2 e 6 locais, entre 4 e 12 pistas e entre 2 e 5 estratégias. Prefira quantidade proporcional à dificuldade.',
     'Cada pista deve usar locationFoundId de um dos locais criados.',
     'Cada estratégia deve referenciar somente IDs de pistas existentes.',
@@ -158,6 +160,7 @@ function buildRepairPreservationContext(context = {}) {
     difficulty: repairCase.difficulty,
     client: content.client,
     briefing: content.briefing,
+    npcAssignments: Array.isArray(content.npcAssignments) ? content.npcAssignments : [],
     locations: locations.map(location => ({
       id: location.id,
       name: location.name,
@@ -166,17 +169,30 @@ function buildRepairPreservationContext(context = {}) {
   };
 }
 
+function plannedPersistentNpcsForLocation(plan, locationId) {
+  const assignments = Array.isArray(plan.content.npcAssignments) ? plan.content.npcAssignments : [];
+  const needs = Array.isArray(plan.content.npcNeeds) ? plan.content.npcNeeds : [];
+  return {
+    assignments: assignments.filter(item => item?.configuration?.locationId === locationId),
+    needs: needs.filter(item => item.locationId === locationId),
+  };
+}
+
 function buildLocationSystem(plan, skeleton, context = {}) {
   const allLocations = plan.content.locations.map(item => ({ id: item.id, name: item.name, unlockedByDefault: item.unlockedByDefault }));
   const clues = plan.content.availableClues.map(item => ({ id: item.id, title: item.title, summary: item.summary, locationFoundId: item.locationFoundId, relevance: item.relevance }));
   const localClues = clues.filter(item => item.locationFoundId === skeleton.id);
   const preservationContext = buildRepairPreservationContext(context);
+  const persistentHere = plannedPersistentNpcsForLocation(plan, skeleton.id);
   return [
     'Você está criando a ETAPA 2 de um caso jogável do Rota da Justiça: DETALHES DE UM ÚNICO LOCAL.',
     'Retorne SOMENTE JSON válido conforme o schema.',
     'Preserve exatamente id, name, category, travelTimeHours, travelCost, description, address, iconName, color, unlockedByDefault e requiredClueOrDialogToUnlock recebidos.',
     'Preencha characters e searchables de modo que o local tenha gameplay real.',
-    'Personagens locais podem ser cliente, réu, testemunhas, funcionários, familiares etc. Eles NÃO são NPCs persistentes.',
+    'characters são PERSONAGENS EXCLUSIVOS deste caso: cliente, vítima, réu, suspeito, testemunha, familiar, funcionário, vizinho etc.',
+    'NÃO duplique dentro de characters um NPC persistente que já esteja planejado em npcAssignments ou npcNeeds para este local. O runtime renderiza esses NPCs separadamente.',
+    'Todo character conversável deve possuir appearanceProfile completo com genderPresentation, ageRange, skinTone, hair, clothing, expression e notes. Varie aparência, idade, traços, cabelo, corpo aparente e vestimenta para evitar rostos genéricos repetidos.',
+    'OMITA portraitSrc, portraitStoragePath e portraitGeneratedAt. O servidor gera e salva o retrato depois que o JSON estiver validado.',
     `REGRA CRÍTICA DE IDs: todos os IDs NOVOS criados dentro deste local para personagens, diálogos e searchables devem começar com o prefixo "${skeleton.id}-". Não use IDs genéricos como character-1, dialogue-1 ou searchable-1.`,
     'Dentro deste local, nenhum ID pode se repetir.',
     'revealsClueId e foundClueId só podem usar IDs da lista de pistas fornecida.',
@@ -187,6 +203,7 @@ function buildLocationSystem(plan, skeleton, context = {}) {
     preservationContext ? 'ESTE É UM REPARO DE CASO EXISTENTE: preserve os personagens centrais, seus nomes, papéis e relações narrativas, além do sentido das interações e diálogos originais sempre que forem compatíveis com o novo contrato. IDs antigos não precisam ser preservados.' : '',
     preservationContext ? 'CONTEXTO NARRATIVO ORIGINAL A PRESERVAR:' : '',
     preservationContext ? JSON.stringify(preservationContext) : '',
+    'NPCs PERSISTENTES PLANEJADOS PARA ESTE LOCAL — NÃO DUPLICAR COMO CHARACTER:', JSON.stringify(persistentHere),
     'CASO:', JSON.stringify({ title: plan.title, area: plan.area, difficulty: plan.difficulty, client: plan.content.client, briefing: plan.content.briefing }),
     'LOCAL FIXO:', JSON.stringify(skeleton),
     'TODOS OS LOCAIS:', JSON.stringify(allLocations),
@@ -210,7 +227,7 @@ async function generateCaseStructured(prompt, context) {
     const rawLocation = await requestParsedJson({
       systemPrompt: buildLocationSystem(plan, skeleton, context),
       prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-. Omita campos opcionais de referência que não tenham valor.`,
-      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-. Nunca use string vazia ou null em referências opcionais.`,
+      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-. Todo character precisa de appearanceProfile. Nunca use string vazia ou null em referências opcionais.`,
     });
     const parsedLocation = caseLocationDetailSchema.parse(normalizeCaseOptionalReferences(rawLocation));
     detailedLocations.push({

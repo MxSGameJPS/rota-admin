@@ -3,13 +3,18 @@ import { loadProviders, newProviderId, saveProviders, toPublicProvider } from '.
 const TYPES = new Set(['openai-compatible', 'ollama', 'custom-rest']);
 const AUTH_TYPES = new Set(['bearer', 'x-api-key', 'custom-header', 'query', 'none']);
 
-function cleanUrl(value) {
+function cleanUrl(value, fieldName = 'URL do provedor') {
   const url = String(value || '').trim();
-  if (!url) throw new Error('Informe a URL do provedor.');
+  if (!url) throw new Error(`Informe a ${fieldName}.`);
   let parsed;
-  try { parsed = new URL(url); } catch { throw new Error('URL do provedor inválida.'); }
-  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('A URL deve começar com http:// ou https://.');
+  try { parsed = new URL(url); } catch { throw new Error(`${fieldName} inválida.`); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`${fieldName} deve começar com http:// ou https://.`);
   return url.replace(/\/+$/, '');
+}
+
+function cleanOptionalUrl(value, fieldName) {
+  const url = String(value || '').trim();
+  return url ? cleanUrl(url, fieldName) : '';
 }
 
 function parseJsonObject(value, fieldName, fallback = {}) {
@@ -34,13 +39,15 @@ function normalizeProvider(input, existing = null) {
   const name = String(input.name || existing?.name || '').trim();
   if (!name) throw new Error('Informe um nome para o provedor.');
 
+  const baseUrl = cleanUrl(input.baseUrl || existing?.baseUrl, 'URL base de texto');
+  const imageEnabled = input.imageEnabled ?? existing?.imageEnabled ?? false;
   const provider = {
     id: existing?.id || input.id || newProviderId(),
     name: name.slice(0, 120),
     type,
     enabled: input.enabled !== false,
     isDefault: Boolean(input.isDefault),
-    baseUrl: cleanUrl(input.baseUrl || existing?.baseUrl),
+    baseUrl,
     endpoint: String(input.endpoint ?? existing?.endpoint ?? '').trim(),
     model: String(input.model ?? existing?.model ?? '').trim(),
     apiKey: String(input.apiKey || existing?.apiKey || '').trim(),
@@ -58,6 +65,21 @@ function normalizeProvider(input, existing = null) {
       ? input.bodyTemplate
       : input.bodyTemplate ? JSON.stringify(input.bodyTemplate, null, 2) : existing?.bodyTemplate || '',
     responsePath: String(input.responsePath ?? existing?.responsePath ?? '').trim(),
+
+    imageEnabled: Boolean(imageEnabled),
+    imageBaseUrl: cleanOptionalUrl(
+      input.imageBaseUrl ?? existing?.imageBaseUrl ?? (type === 'openai-compatible' ? baseUrl : ''),
+      'URL base de imagem',
+    ),
+    imageEndpoint: String(input.imageEndpoint ?? existing?.imageEndpoint ?? '/images/generations').trim(),
+    imageModel: String(input.imageModel ?? existing?.imageModel ?? '').trim(),
+    imageSize: String(input.imageSize ?? existing?.imageSize ?? '1024x1024').trim() || '1024x1024',
+    imageN: Math.round(clampNumber(input.imageN ?? existing?.imageN, 1, 1, 4)),
+    imageTimeout: Math.round(clampNumber(input.imageTimeout ?? existing?.imageTimeout, 120000, 1000, 600000)),
+    imageHeadersJson: typeof input.imageHeadersJson === 'string'
+      ? input.imageHeadersJson
+      : input.imageHeadersJson ? JSON.stringify(input.imageHeadersJson, null, 2) : existing?.imageHeadersJson || '{}',
+
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -65,7 +87,9 @@ function normalizeProvider(input, existing = null) {
   if (!AUTH_TYPES.has(provider.authType)) throw new Error('Tipo de autenticação inválido.');
   if (!['GET', 'POST', 'PUT', 'PATCH'].includes(provider.method)) throw new Error('Método HTTP não permitido.');
   parseJsonObject(provider.headersJson, 'Cabeçalhos adicionais');
+  parseJsonObject(provider.imageHeadersJson, 'Cabeçalhos adicionais de imagem');
   if (type === 'custom-rest' && provider.bodyTemplate) parseJsonObject(provider.bodyTemplate, 'Template do corpo');
+  if (provider.imageEnabled && !provider.imageBaseUrl) throw new Error('Informe a URL base para geração de imagens.');
   return provider;
 }
 
@@ -106,9 +130,30 @@ function normalizeGenerationRequest(input) {
   };
 }
 
+function normalizeImageGenerationRequest(input, provider) {
+  const request = typeof input === 'string' ? { prompt: input } : (input || {});
+  const prompt = String(request.prompt || '').trim();
+  if (!prompt) throw new Error('Informe o prompt da imagem.');
+  return {
+    prompt,
+    size: String(request.size || provider.imageSize || '1024x1024').trim(),
+    n: Math.round(clampNumber(request.n ?? provider.imageN, provider.imageN || 1, 1, 4)),
+    timeoutMs: request.timeoutMs == null
+      ? null
+      : Math.round(clampNumber(request.timeoutMs, provider.imageTimeout || 120000, 1000, 600000)),
+  };
+}
+
 function ensureReadyForGeneration(provider) {
   if (!provider.enabled) throw new Error('O provedor está desativado.');
   if (!provider.model && provider.type !== 'custom-rest') throw new Error('Escolha um modelo antes de usar este provedor.');
+}
+
+function ensureReadyForImageGeneration(provider) {
+  if (!provider.enabled) throw new Error('O provedor está desativado.');
+  if (!provider.imageEnabled) throw new Error('A geração de imagens está desativada neste provedor.');
+  if (!provider.imageBaseUrl) throw new Error('Configure a URL base da geração de imagens.');
+  if (!provider.imageModel) throw new Error('Configure o modelo de geração de imagens.');
 }
 
 function authRequest(provider, url, headers) {
@@ -121,11 +166,11 @@ function authRequest(provider, url, headers) {
   return target;
 }
 
-async function requestJson(provider, { url, method = 'POST', body, timeoutMs = null }) {
-  const headers = { Accept: 'application/json', ...parseJsonObject(provider.headersJson, 'Cabeçalhos adicionais') };
+async function requestJson(provider, { url, method = 'POST', body, timeoutMs = null, headersJson = provider.headersJson, defaultTimeout = provider.timeout }) {
+  const headers = { Accept: 'application/json', ...parseJsonObject(headersJson, 'Cabeçalhos adicionais') };
   if (body !== undefined) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   const target = authRequest(provider, url, headers);
-  const effectiveTimeout = Math.round(clampNumber(timeoutMs ?? provider.timeout, provider.timeout || 120000, 1000, 600000));
+  const effectiveTimeout = Math.round(clampNumber(timeoutMs ?? defaultTimeout, defaultTimeout || 120000, 1000, 600000));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
   const started = Date.now();
@@ -149,7 +194,7 @@ async function requestJson(provider, { url, method = 'POST', body, timeoutMs = n
     if (error?.name === 'AbortError') {
       throw new Error(`O provedor excedeu o tempo limite de ${Math.round(effectiveTimeout / 1000)} segundos.`);
     }
-    if (error?.cause?.code === 'ECONNREFUSED') throw new Error(`Não foi possível conectar em ${provider.baseUrl}. Confirme se o serviço está em execução.`);
+    if (error?.cause?.code === 'ECONNREFUSED') throw new Error(`Não foi possível conectar em ${target.origin}. Confirme se o serviço está em execução.`);
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -243,6 +288,42 @@ async function generateInternal(provider, request) {
   return { ...result, providerId: provider.id, providerName: provider.name, model: provider.model || '' };
 }
 
+async function generateImageInternal(provider, requestInput) {
+  ensureReadyForImageGeneration(provider);
+  const request = normalizeImageGenerationRequest(requestInput, provider);
+  const endpoint = provider.imageEndpoint || '/images/generations';
+  const result = await requestJson(provider, {
+    url: provider.imageBaseUrl + (endpoint.startsWith('/') ? endpoint : '/' + endpoint),
+    timeoutMs: request.timeoutMs,
+    defaultTimeout: provider.imageTimeout,
+    headersJson: provider.imageHeadersJson,
+    body: {
+      prompt: request.prompt,
+      model: provider.imageModel,
+      n: request.n,
+      size: request.size,
+    },
+  });
+
+  const entries = Array.isArray(result.data?.data) ? result.data.data : [];
+  const first = entries[0] || {};
+  const directUrl = typeof first.url === 'string' ? first.url.trim() : '';
+  const base64 = typeof first.b64_json === 'string' ? first.b64_json.trim() : '';
+  const source = directUrl || (base64 ? `data:image/png;base64,${base64}` : '');
+  if (!source) throw new Error('A resposta de imagem não contém data[0].url nem data[0].b64_json.');
+
+  return {
+    ...result,
+    source,
+    revisedPrompt: typeof first.revised_prompt === 'string' ? first.revised_prompt : '',
+    count: entries.length,
+    providerId: provider.id,
+    providerName: provider.name,
+    model: provider.imageModel,
+    size: request.size,
+  };
+}
+
 export async function listProvidersPublic() {
   return (await loadProviders()).map(toPublicProvider);
 }
@@ -257,6 +338,14 @@ export async function getDefaultProviderInternal() {
   const providers = await loadProviders();
   const provider = providers.find(item => item.enabled && item.isDefault) || providers.find(item => item.enabled);
   if (!provider) throw new Error('Nenhum provedor de IA ativo foi configurado. Acesse Configurações → Inteligência Artificial.');
+  return provider;
+}
+
+export async function getDefaultImageProviderInternal() {
+  const providers = await loadProviders();
+  const provider = providers.find(item => item.enabled && item.imageEnabled && item.isDefault)
+    || providers.find(item => item.enabled && item.imageEnabled);
+  if (!provider) throw new Error('Nenhum provedor ativo com geração de imagens foi configurado. Acesse Configurações → Inteligência Artificial.');
   return provider;
 }
 
@@ -303,6 +392,26 @@ export async function testProvider(id) {
   };
 }
 
+export async function testImageProvider(id) {
+  const provider = await getProviderInternal(id);
+  const result = await generateImageInternal(provider, {
+    prompt: 'Retrato 2D simples de um personagem fictício de jogo jurídico, busto, fundo neutro, sem texto e sem logotipos.',
+    n: 1,
+    timeoutMs: Math.min(provider.imageTimeout || 120000, 120000),
+  });
+  const isDataUri = result.source.startsWith('data:');
+  const encoded = isDataUri ? result.source.split(',')[1] || '' : '';
+  return {
+    ok: true,
+    status: result.status,
+    elapsedMs: result.elapsedMs,
+    model: result.model,
+    size: result.size,
+    sourceType: isDataUri ? 'data-uri' : 'url',
+    bytes: encoded ? Buffer.byteLength(encoded, 'base64') : null,
+  };
+}
+
 export async function listProviderModels(id) {
   const provider = await getProviderInternal(id);
   if (provider.type === 'custom-rest') return [];
@@ -320,4 +429,12 @@ export async function generateWithProvider(id, request) {
 
 export async function generateWithDefaultProvider(request) {
   return generateInternal(await getDefaultProviderInternal(), request);
+}
+
+export async function generateImageWithProvider(id, request) {
+  return generateImageInternal(await getProviderInternal(id), request);
+}
+
+export async function generateImageWithDefaultProvider(request) {
+  return generateImageInternal(await getDefaultImageProviderInternal(), request);
 }

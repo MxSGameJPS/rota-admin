@@ -6,6 +6,7 @@
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 20px; }
 .panel h3 { margin: 0 0 6px; font: 700 17px Georgia, serif; }
 .panel p { color: var(--muted); line-height: 1.5; }
+.panel a { color: var(--gold); }
 .form { display: grid; gap: 10px; margin-top: 14px; }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .form input,.form textarea,.form select { width: 100%; background: #0a0c0f; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; outline: none; }
@@ -29,4 +30,15 @@
 .card h4 { margin: 0 0 7px; font: 700 16px Georgia, serif; }
 .card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .code { background: #08090b; border: 1px solid var(--border); color: #c9ced8; padding: 16px; border-radius: 10px; overflow: auto; font: 11px/1.55 monospace; max-height: 420px; }
-@media (max-width: 900px) { .cards,.formGrid { grid-template-columns: 1fr; } .header { align-items: flex-start; flex-direction: column; } }
+.assetList { display: grid; gap: 10px; margin-top: 14px; }
+.assetRow { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 11px; background: #0b0d10; }
+.assetRow > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.assetRow strong { color: var(--text); }
+.assetRow span { color: var(--muted); font-size: 11px; }
+.assetRow a { font-size: 11px; }
+.assetThumb { width: 58px; height: 58px; object-fit: cover; object-position: top center; border-radius: 10px; border: 1px solid var(--border); background: #08090b; }
+.warningList { display: grid; gap: 6px; margin-top: 12px; padding: 10px 12px; border-radius: 9px; border: 1px solid rgba(255,184,77,.28); background: rgba(255,184,77,.06); color: #e5b96d; font-size: 11px; line-height: 1.5; }
+.portraitPanel { display: grid; grid-template-columns: 190px minmax(0,1fr); gap: 20px; align-items: start; }
+.portraitLarge { width: 190px; aspect-ratio: 1/1; object-fit: cover; object-position: top center; border-radius: 14px; border: 1px solid var(--border); background: #08090b; }
+.portraitPlaceholder { width: 190px; aspect-ratio: 1/1; display: grid; place-items: center; border-radius: 14px; border: 1px dashed var(--border); background: #08090b; color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) { .cards,.formGrid { grid-template-columns: 1fr; } .header { align-items: flex-start; flex-direction: column; } .portraitPanel { grid-template-columns: 1fr; } .portraitLarge,.portraitPlaceholder { width: min(100%,260px); } }

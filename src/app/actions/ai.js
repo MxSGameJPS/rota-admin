@@ -5,6 +5,7 @@ import {
   listProviderModels,
   listProvidersPublic,
   removeProvider,
+  testImageProvider,
   testProvider,
   upsertProvider,
 } from '@/services/ai/providerService';
@@ -31,6 +32,10 @@ export async function deleteProviderAction(id) {
 
 export async function testProviderAction(id) {
   return testProvider(id);
+}
+
+export async function testImageProviderAction(id) {
+  return testImageProvider(id);
 }
 
 export async function listModelsAction(id) {
