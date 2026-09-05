@@ -8,13 +8,17 @@ import {
   generateCaseReactiveEvents,
   generateCaseReactiveHearing,
   generateCaseReactiveWorld,
-  saveCaseReactiveWorld,
 } from '@/services/caseReactiveWorldService';
 import {
   getEntityForEditor,
   updateDraft,
   validateCaseNpcAssignments,
 } from '@/services/contentService';
+import {
+  discardPendingCaseRepair,
+  publishPendingCaseRepair,
+  savePendingCaseRepair,
+} from '@/services/caseMaintenanceService';
 import {
   repairPendingNpcs,
   repairPendingPortraits,
@@ -27,12 +31,6 @@ function fail(route, error, fallback) {
   redirect(`${route}?error=${encodeURIComponent(message)}`);
 }
 
-function assertDraft(current) {
-  if (current.status !== 'draft') {
-    throw new Error('Este reparo altera o conteúdo do caso e só pode ser executado enquanto ele estiver em draft.');
-  }
-}
-
 async function saveDraftCase(id, model) {
   const parsed = ENTITY_SCHEMAS.case.parse(model);
   await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
@@ -40,18 +38,38 @@ async function saveDraftCase(id, model) {
   return parsed;
 }
 
+async function persistRepair(id, current, candidate, { type, summary }) {
+  const parsed = ENTITY_SCHEMAS.case.parse(candidate);
+  await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
+
+  if (current.status === 'published') {
+    await savePendingCaseRepair(id, parsed, { type, summary });
+    return { pending: true };
+  }
+
+  await saveDraftCase(id, parsed);
+  return { pending: false };
+}
+
+function redirectAfterRepair(route, repair, result, extra = '') {
+  const pending = result?.pending ? '&pendingReview=1' : '';
+  redirect(`${route}?repair=${repair}${pending}${extra}`);
+}
+
 export async function repairCasePortraitsAction(formData) {
   const id = String(formData.get('id') || '').trim();
   const route = `/cases/${id}`;
-  if (!id) redirect('/cases?error=Caso%20inv%C3%A1lido.');
+  if (!id) redirect('/cases?error=' + encodeURIComponent('Caso inválido para reparar retratos.'));
   try {
     const current = await getEntityForEditor('case', id);
-    assertDraft(current);
     const result = await repairPendingPortraits(current);
-    await saveDraftCase(id, result.caseData);
+    const persisted = await persistRepair(id, current, result.caseData, {
+      type: 'portraits',
+      summary: `Retratos pendentes reprocessados: ${result.generatedLocal + result.generatedNpc} imagem(ns) gerada(s).`,
+    });
     revalidatePath(route);
     revalidatePath('/npcs');
-    redirect(`${route}?repair=portraits&count=${result.generatedLocal + result.generatedNpc}`);
+    redirectAfterRepair(route, 'portraits', persisted, `&count=${result.generatedLocal + result.generatedNpc}`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao reparar retratos pendentes.');
@@ -65,11 +83,13 @@ export async function repairSinglePortraitAction(formData) {
   const route = `/cases/${id}`;
   try {
     const current = await getEntityForEditor('case', id);
-    assertDraft(current);
     const repaired = await repairSingleCasePortrait(current, { locationId, characterId });
-    await saveDraftCase(id, repaired);
+    const persisted = await persistRepair(id, current, repaired, {
+      type: 'portrait-one',
+      summary: 'Um retrato individual foi gerado e está pronto para revisão.',
+    });
     revalidatePath(route);
-    redirect(`${route}?repair=portrait-one`);
+    redirectAfterRepair(route, 'portrait-one', persisted);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao gerar o retrato deste personagem.');
@@ -81,12 +101,14 @@ export async function repairCaseNpcsAction(formData) {
   const route = `/cases/${id}`;
   try {
     const current = await getEntityForEditor('case', id);
-    assertDraft(current);
     const repaired = await repairPendingNpcs(current);
-    await saveDraftCase(id, repaired);
+    const persisted = await persistRepair(id, current, repaired, {
+      type: 'npcs',
+      summary: 'NPCs pendentes foram reprocessados sem reconstruir o caso.',
+    });
     revalidatePath(route);
     revalidatePath('/npcs');
-    redirect(`${route}?repair=npcs`);
+    redirectAfterRepair(route, 'npcs', persisted);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao reprocessar NPCs pendentes.');
@@ -98,11 +120,13 @@ export async function repairCaseReferencesAction(formData) {
   const route = `/cases/${id}`;
   try {
     const current = await getEntityForEditor('case', id);
-    assertDraft(current);
     const result = repairSafeInternalReferences(current);
-    await saveDraftCase(id, result.caseData);
+    const persisted = await persistRepair(id, current, result.caseData, {
+      type: 'references',
+      summary: `${result.repaired} referência(s) interna(s) segura(s) corrigida(s).`,
+    });
     revalidatePath(route);
-    redirect(`${route}?repair=references&count=${result.repaired}`);
+    redirectAfterRepair(route, 'references', persisted, `&count=${result.repaired}`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao corrigir referências internas.');
@@ -130,9 +154,16 @@ export async function repairReactiveEventsAction(formData) {
       },
     });
     validateReactiveWorldReferences(config, current);
-    const saved = await saveCaseReactiveWorld(id, config);
+    const candidate = {
+      ...current,
+      metadata: { ...(current.metadata || {}), reactiveWorld: config },
+    };
+    const persisted = await persistRepair(id, current, candidate, {
+      type: 'events',
+      summary: `Intercorrências específicas regeneradas (${events.length} evento(s)).`,
+    });
     revalidatePath(route);
-    redirect(`${route}?repair=events&version=${saved.version}`);
+    redirectAfterRepair(route, 'events', persisted);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao gerar somente as intercorrências.');
@@ -161,9 +192,18 @@ export async function repairReactiveHearingAction(formData) {
       },
     });
     validateReactiveWorldReferences(config, current);
-    const saved = await saveCaseReactiveWorld(id, config);
+    const candidate = {
+      ...current,
+      metadata: { ...(current.metadata || {}), reactiveWorld: config },
+    };
+    const persisted = await persistRepair(id, current, candidate, {
+      type: 'hearing',
+      summary: hearing
+        ? `Audiência específica regenerada (${hearing.rounds?.length || 0} etapa(s)).`
+        : 'A IA avaliou o caso e registrou que não há audiência oral específica necessária.',
+    });
     revalidatePath(route);
-    redirect(`${route}?repair=hearing&version=${saved.version}`);
+    redirectAfterRepair(route, 'hearing', persisted);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao gerar somente a audiência.');
@@ -174,13 +214,13 @@ export async function repairAllCasePendingAction(formData) {
   const id = String(formData.get('id') || '').trim();
   const route = `/cases/${id}`;
   try {
-    let current = await getEntityForEditor('case', id);
-    assertDraft(current);
+    const original = await getEntityForEditor('case', id);
+    let current = original;
     const repairedSteps = [];
 
     const baseCheck = ENTITY_SCHEMAS.case.safeParse(current);
     const hasReferenceIssue = !baseCheck.success && baseCheck.error.issues.some((issue) =>
-      /inexistente|referencia|desbloqueia|revela|aponta/i.test(issue.message),
+      !/duplicado/i.test(issue.message) && /inexistente|referencia|desbloqueia|revela|aponta/i.test(issue.message),
     );
     if (hasReferenceIssue) {
       const references = repairSafeInternalReferences(current);
@@ -220,12 +260,56 @@ export async function repairAllCasePendingAction(formData) {
       repairedSteps.push('mundo-reativo');
     }
 
-    await saveDraftCase(id, current);
+    const persisted = await persistRepair(id, original, current, {
+      type: 'automatic',
+      summary: repairedSteps.length
+        ? `Reparo inteligente executou: ${repairedSteps.join(', ')}.`
+        : 'Diagnóstico não encontrou reparos automáticos adicionais.',
+    });
     revalidatePath(route);
     revalidatePath('/npcs');
-    redirect(`${route}?repair=all&steps=${encodeURIComponent(repairedSteps.join(','))}`);
+    redirectAfterRepair(route, 'all', persisted, `&steps=${encodeURIComponent(repairedSteps.join(','))}`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error, 'Falha ao corrigir automaticamente as pendências do caso.');
+  }
+}
+
+export async function publishPendingCaseRepairAction(formData) {
+  const id = String(formData.get('id') || '').trim();
+  const route = `/cases/${id}`;
+  try {
+    const current = await getEntityForEditor('case', id);
+    const pending = current.metadata?.pendingGranularRepair;
+    if (!pending?.candidate?.content) throw new Error('Não existe correção pendente para publicar.');
+
+    const candidate = ENTITY_SCHEMAS.case.parse({
+      ...current,
+      content: pending.candidate.content,
+      metadata: pending.candidate.metadata || {},
+      status: 'published',
+    });
+    await validateCaseNpcAssignments(candidate.content, { allowDraft: false });
+    const result = await publishPendingCaseRepair(id);
+    revalidatePath(route);
+    revalidatePath('/cases');
+    revalidatePath('/npcs');
+    redirect(`${route}?repairPublished=1&version=${result.version}`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error, 'Falha ao publicar a correção pendente.');
+  }
+}
+
+export async function discardPendingCaseRepairAction(formData) {
+  const id = String(formData.get('id') || '').trim();
+  const route = `/cases/${id}`;
+  try {
+    await discardPendingCaseRepair(id);
+    revalidatePath(route);
+    redirect(`${route}?repairDiscarded=1`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error, 'Falha ao descartar a correção pendente.');
   }
 }
