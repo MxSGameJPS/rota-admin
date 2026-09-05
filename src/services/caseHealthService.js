@@ -28,7 +28,7 @@ function localCharacters(caseModel) {
 export async function analyzeCaseHealth(caseModel) {
   const baseResult = ENTITY_SCHEMAS.case.safeParse(caseModel);
   const baseIssues = baseResult.success ? [] : baseResult.error.issues.map(issueMessage);
-  const referenceIssues = baseIssues.filter((message) => /inexistente|duplicado|referencia|desbloqueia|revela|aponta/i.test(message));
+  const referenceIssues = baseIssues.filter((message) => !/duplicado/i.test(message) && /inexistente|referencia|desbloqueia|revela|aponta/i.test(message));
   const structuralIssues = baseIssues.filter((message) => !referenceIssues.includes(message));
 
   let npcIssue = '';
