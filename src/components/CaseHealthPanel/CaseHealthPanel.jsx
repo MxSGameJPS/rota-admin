@@ -17,7 +17,7 @@ import {
 import styles from './CaseHealthPanel.module.css';
 
 function Status({ ok, label }) {
-  return <span className={ok ? styles.ok : styles.warn}>{ok ? '✓' : '!' } {label}</span>;
+  return <span className={ok ? styles.ok : styles.warn}>{ok ? '✓' : '!'} {label}</span>;
 }
 
 function ActionButton({ action, id, label, working, setWorking, token, children, disabled = false, danger = false }) {
@@ -40,18 +40,15 @@ export default function CaseHealthPanel({ id, status, health }) {
   const hasNpcPending = Number(health?.npcs?.pendingNeeds || 0) > 0 || Boolean(health?.npcs?.issue);
   const reactiveHealthy = Boolean(health?.reactive?.present && health?.reactive?.valid);
   const eventsReady = Number(health?.reactive?.eventsCount || 0) > 0;
+  const hearingNeedsRepair = health?.reactive?.hearingState === 'missing' || health?.reactive?.hearingState === 'invalid';
+  const hearingOk = !hearingNeedsRepair;
   const hasPending = Boolean(health?.pending?.exists);
 
-  // Server Actions deste painel redirecionam de volta para a mesma rota. O Next pode
-  // preservar o estado do componente nessa navegação; sem este reset, `working`
-  // permanece preenchido mesmo depois de a operação ter concluído com sucesso.
   useEffect(() => {
     setWorking('');
     setWorkingWarning('');
   }, [searchKey, health]);
 
-  // Rede/IA nunca deve deixar o Admin visualmente bloqueado para sempre. Esse
-  // watchdog libera a interface e orienta a conferir o estado salvo antes de repetir.
   useEffect(() => {
     if (!working) return undefined;
 
@@ -136,14 +133,14 @@ export default function CaseHealthPanel({ id, status, health }) {
 
       <div className={styles.card}>
         <div className={styles.cardTitle}><strong>Intercorrências</strong><Status ok={eventsReady} label={eventsReady ? `${health.reactive.eventsCount} gerada(s)` : 'faltando'} /></div>
-        <p>Regera somente os eventos inesperados, preservando audiência e restante do caso quando válidos.</p>
-        <ActionButton action={repairReactiveEventsAction} id={id} label={eventsReady ? 'Regenerar só intercorrências' : 'Gerar intercorrências'} working={working} setWorking={setWorking} token="events" disabled={hasPending} />
+        <p>{eventsReady ? 'Eventos específicos configurados e prontos para o jogo.' : 'O caso ainda precisa de intercorrências específicas.'}</p>
+        {!eventsReady && <ActionButton action={repairReactiveEventsAction} id={id} label="Gerar intercorrências" working={working} setWorking={setWorking} token="events" disabled={hasPending} />}
       </div>
 
       <div className={styles.card}>
-        <div className={styles.cardTitle}><strong>Audiência</strong><Status ok={health?.reactive?.hearingState !== 'missing' && health?.reactive?.hearingState !== 'invalid'} label={health?.reactive?.hearingState === 'ready' ? `${health.reactive.hearingRounds} etapa(s)` : health?.reactive?.hearingState === 'not_required' ? 'dispensada pela IA' : 'faltando'} /></div>
-        <p>A audiência pode ser recriada isoladamente sem gastar tokens regenerando intercorrências.</p>
-        <ActionButton action={repairReactiveHearingAction} id={id} label="Gerar/regenerar só audiência" working={working} setWorking={setWorking} token="hearing" disabled={!eventsReady || hasPending} />
+        <div className={styles.cardTitle}><strong>Audiência</strong><Status ok={hearingOk} label={health?.reactive?.hearingState === 'ready' ? `${health.reactive.hearingRounds} etapa(s)` : health?.reactive?.hearingState === 'not_required' ? 'dispensada pela IA' : 'faltando'} /></div>
+        <p>{hearingOk ? 'Audiência específica já processada para este caso.' : 'A audiência ainda precisa ser gerada ou corrigida.'}</p>
+        {hearingNeedsRepair && <ActionButton action={repairReactiveHearingAction} id={id} label="Gerar audiência" working={working} setWorking={setWorking} token="hearing" disabled={!eventsReady || hasPending} />}
       </div>
     </div>
 
@@ -174,10 +171,12 @@ export default function CaseHealthPanel({ id, status, health }) {
     <div className={styles.footer}>
       <div>
         <strong>Reparo inteligente</strong>
-        <span>Analisa o estado atual e executa apenas correções necessárias: referências seguras, NPCs pendentes, imagens faltantes e mundo reativo ausente/inválido.</span>
-        {published && <small>Em caso publicado, o resultado fica em revisão e só entra no jogo quando você clicar em “Publicar correção no jogo”.</small>}
+        <span>{health?.healthy ? 'Nenhuma pendência foi detectada. O caso está pronto e não precisa de reparos.' : 'Analisa o estado atual e executa apenas correções necessárias: referências seguras, NPCs pendentes, imagens faltantes e mundo reativo ausente/inválido.'}</span>
+        {!health?.healthy && published && <small>Em caso publicado, o resultado fica em revisão e só entra no jogo quando você clicar em “Publicar correção no jogo”.</small>}
       </div>
-      <ActionButton action={repairAllCasePendingAction} id={id} label="Corrigir pendências automaticamente" working={working} setWorking={setWorking} token="all" disabled={health?.healthy || hasPending} />
+      {health?.healthy
+        ? <Status ok label="nenhuma pendência" />
+        : <ActionButton action={repairAllCasePendingAction} id={id} label="Corrigir pendências automaticamente" working={working} setWorking={setWorking} token="all" disabled={hasPending} />}
     </div>
 
     {draft && <small className={styles.draftHint}>Este caso está em draft. Reparos são salvos diretamente no rascunho; depois use o fluxo normal de publicação do caso.</small>}
