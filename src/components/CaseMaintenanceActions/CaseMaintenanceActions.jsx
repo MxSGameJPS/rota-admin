@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { deleteCaseAction, regenerateCaseAction } from '@/app/actions/content';
+import { retryCasePortraitsAction } from '@/app/actions/casePortraits';
 import styles from './CaseMaintenanceActions.module.css';
 
 export default function CaseMaintenanceActions({ id, title, status, version }) {
@@ -23,6 +24,10 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
     setWorking('delete');
   }
 
+  function retryPortraits() {
+    setWorking('portraits');
+  }
+
   return (
     <div className={styles.box}>
       <div>
@@ -30,6 +35,12 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
         <p>Reconstrua o caso inteiro somente se ele estiver incompatível com o contrato jogável atual. Para adicionar intercorrências e audiência, use o painel de mundo reativo acima.</p>
       </div>
       <div className={styles.actions}>
+        {status === 'draft' && <form action={retryCasePortraitsAction} onSubmit={retryPortraits}>
+          <input type="hidden" name="id" value={id} />
+          <button className={styles.regenerate} disabled={Boolean(working)}>
+            {working === 'portraits' ? 'Reprocessando retratos…' : 'Reprocessar retratos pendentes'}
+          </button>
+        </form>}
         <form action={regenerateCaseAction} onSubmit={confirmRegenerate}>
           <input type="hidden" name="id" value={id} />
           <button className={styles.regenerate} disabled={Boolean(working)}>
@@ -43,6 +54,12 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
           </button>
         </form>
       </div>
+      {working === 'portraits' && (
+        <div className={styles.progress} role="status" aria-live="polite">
+          <span className={styles.spinner} />
+          <div><strong>Reprocessando retratos pendentes…</strong><span>Somente personagens sem retrato serão enviados novamente para a IA. O conteúdo jurídico do caso não será alterado.</span></div>
+        </div>
+      )}
       {working === 'regenerate' && (
         <div className={styles.progress} role="status" aria-live="polite">
           <span className={styles.spinner} />
