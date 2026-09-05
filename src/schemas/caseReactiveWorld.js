@@ -15,7 +15,7 @@ const eventTriggerSchema = z.object({
   deadlineRatio: z.number().min(0).max(1).nullable().default(null),
 });
 
-const eventSchema = z.object({
+export const eventSchema = z.object({
   id: z.string().min(2),
   eyebrow: z.string().min(3),
   title: z.string().min(10),
@@ -42,11 +42,19 @@ const hearingRoundSchema = z.object({
   choices: z.array(hearingChoiceSchema).min(2).max(4),
 });
 
-const hearingSchema = z.object({
+export const hearingSchema = z.object({
   enabled: z.boolean().default(true),
   title: z.string().min(5).default('Audiência de instrução'),
   intro: z.string().min(10),
   rounds: z.array(hearingRoundSchema).min(2).max(6),
+});
+
+export const caseReactiveEventsStageSchema = z.object({
+  events: z.array(eventSchema).min(1).max(5),
+});
+
+export const caseReactiveHearingStageSchema = z.object({
+  hearing: hearingSchema.nullable().default(null),
 });
 
 export const caseReactiveWorldSchema = z.object({
@@ -93,4 +101,6 @@ export function validateReactiveWorldReferences(config, caseModel) {
   return config;
 }
 
+export const CASE_REACTIVE_EVENTS_STAGE_SCHEMA_JSON = z.toJSONSchema(caseReactiveEventsStageSchema);
+export const CASE_REACTIVE_HEARING_STAGE_SCHEMA_JSON = z.toJSONSchema(caseReactiveHearingStageSchema);
 export const CASE_REACTIVE_WORLD_SCHEMA_JSON = z.toJSONSchema(caseReactiveWorldSchema);
