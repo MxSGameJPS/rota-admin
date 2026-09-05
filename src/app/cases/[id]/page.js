@@ -15,7 +15,17 @@ export default async function CaseEditorPage({ params, searchParams }) {
   const health = await analyzeCaseHealth(model);
   const automation = model.metadata?.automation || {};
   const generatedNpcDrafts = Array.isArray(automation.generatedNpcDrafts) ? automation.generatedNpcDrafts : [];
-  const warnings = Array.isArray(automation.warnings) ? automation.warnings : [];
+  const storedWarnings = Array.isArray(automation.warnings) ? automation.warnings : [];
+  const portraitIssues = Number(health?.portraits?.missing?.length || 0) + Number(health?.portraits?.generatedNpcPortraitsMissing?.length || 0) > 0;
+  const reactiveIssues = !(health?.reactive?.present && health?.reactive?.valid);
+  const npcIssues = Number(health?.npcs?.pendingNeeds || 0) > 0 || Boolean(health?.npcs?.issue);
+  const warnings = health?.healthy ? [] : storedWarnings.filter((warning) => {
+    const normalized = String(warning || '').toLowerCase();
+    if (/retrato|portrait/.test(normalized) && !portraitIssues) return false;
+    if (/mundo reativo|intercorr|audi[eê]ncia/.test(normalized) && !reactiveIssues) return false;
+    if (/\bnpc/.test(normalized) && !npcIssues) return false;
+    return true;
+  });
 
   return <div className={styles.page}>
     <div className={styles.header}>
