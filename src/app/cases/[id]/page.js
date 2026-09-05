@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import JsonEditor from '@/components/JsonEditor/JsonEditor';
 import CaseMaintenanceActions from '@/components/CaseMaintenanceActions/CaseMaintenanceActions';
+import CaseReactiveWorldPanel from '@/components/CaseReactiveWorldPanel/CaseReactiveWorldPanel';
 import { getEntityForEditor } from '@/services/contentService';
 import styles from '@/app/section.module.css';
 
@@ -20,6 +21,7 @@ export default async function CaseEditorPage({ params, searchParams }) {
     {query?.created && <div className={styles.notice}>Draft gerado. O Admin já analisou NPCs e retratos automaticamente; revise o resultado antes de publicar.</div>}
     {query?.updated && <div className={styles.notice}>Rascunho salvo e validado.</div>}
     {query?.regenerated && <div className={styles.notice}>Caso regenerado com IA e devolvido para draft. NPCs e retratos também foram reavaliados.</div>}
+    {query?.reactiveGenerated && <div className={styles.notice}>Mundo reativo gerado com IA. Intercorrências e audiência específicas deste caso já estão disponíveis para o jogo.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
     {(generatedNpcDrafts.length > 0 || Number(automation.localPortraitsGenerated || 0) > 0 || warnings.length > 0) && <div className={styles.panel}>
@@ -37,6 +39,7 @@ export default async function CaseEditorPage({ params, searchParams }) {
       {warnings.length > 0 && <div className={styles.warningList}>{warnings.map((warning, index) => <div key={`${index}-${warning}`}>⚠ {warning}</div>)}</div>}
     </div>}
 
+    <CaseReactiveWorldPanel model={model}/>
     <CaseMaintenanceActions id={id} title={model.title} status={model.status}/>
     <JsonEditor entityType="case" id={id} value={model} status={model.status}/>
   </div>;
