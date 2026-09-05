@@ -2,6 +2,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@/lib/ai/provider": ["src/lib/ai/providerRouter.js"],
       "@/*": ["src/*"]
     }
   }
