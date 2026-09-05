@@ -180,10 +180,20 @@ function hearingSystemPrompt() {
   ].join('\n\n');
 }
 
-export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
+function validateHearingReferences(hearing, caseModel) {
+  if (!hearing) return hearing;
+  const clueIds = new Set((caseModel?.content?.availableClues || []).map((clue) => clue.id));
+  for (const round of hearing.rounds || []) {
+    if (round.relatedClueId && !clueIds.has(round.relatedClueId)) {
+      throw new Error(`A etapa de audiência ${round.id} referencia uma pista inexistente: ${round.relatedClueId}.`);
+    }
+  }
+  return hearing;
+}
+
+export async function generateCaseReactiveEvents(caseModel, extraPrompt = '') {
   const context = compactCaseContext(caseModel);
   const adminInstruction = extraPrompt ? `ORIENTAÇÃO EXTRA DO ADMINISTRADOR: ${extraPrompt}` : '';
-
   const rawEvents = await requestStage({
     stage: 'intercorrências do caso',
     systemPrompt: eventsSystemPrompt(),
@@ -196,7 +206,14 @@ export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
     compactHint: 'Use 1 ou 2 intercorrências, 2 escolhas por intercorrência e textos curtos.',
   });
   const eventsStage = caseReactiveEventsStageSchema.parse(rawEvents);
+  const validationShell = caseReactiveWorldSchema.parse({ version: 1, events: eventsStage.events, hearing: null });
+  validateReactiveWorldReferences(validationShell, caseModel);
+  return eventsStage.events;
+}
 
+export async function generateCaseReactiveHearing(caseModel, events = [], extraPrompt = '') {
+  const context = compactCaseContext(caseModel);
+  const adminInstruction = extraPrompt ? `ORIENTAÇÃO EXTRA DO ADMINISTRADOR: ${extraPrompt}` : '';
   const rawHearing = await requestStage({
     stage: 'audiência do caso',
     systemPrompt: hearingSystemPrompt(),
@@ -205,17 +222,22 @@ export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
       adminInstruction,
       'CASO:',
       JSON.stringify(context),
-      'INTERCORRÊNCIAS JÁ CRIADAS (use apenas como contexto narrativo):',
-      JSON.stringify(eventsStage.events.map((event) => ({ id: event.id, title: event.title, relatedClueId: event.relatedClueId }))),
+      'INTERCORRÊNCIAS JÁ EXISTENTES (use apenas como contexto narrativo):',
+      JSON.stringify((events || []).map((event) => ({ id: event.id, title: event.title, relatedClueId: event.relatedClueId }))),
     ].filter(Boolean).join('\n\n'),
     compactHint: 'Se houver audiência, use exatamente 2 etapas e 2 escolhas por etapa. Se não for necessária, retorne hearing null.',
   });
   const hearingStage = caseReactiveHearingStageSchema.parse(rawHearing);
+  return validateHearingReferences(hearingStage.hearing, caseModel);
+}
 
+export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
+  const events = await generateCaseReactiveEvents(caseModel, extraPrompt);
+  const hearing = await generateCaseReactiveHearing(caseModel, events, extraPrompt);
   const parsed = caseReactiveWorldSchema.parse({
     version: 1,
-    events: eventsStage.events,
-    hearing: hearingStage.hearing,
+    events,
+    hearing,
   });
   return validateReactiveWorldReferences(parsed, caseModel);
 }
