@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { deleteCaseAction, regenerateCaseAction } from '@/app/actions/content';
-import { retryCasePortraitsAction } from '@/app/actions/casePortraits';
 import styles from './CaseMaintenanceActions.module.css';
 
 export default function CaseMaintenanceActions({ id, title, status, version }) {
@@ -10,7 +9,7 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
 
   function confirmRegenerate(event) {
     const ok = window.confirm(
-      `Reconstruir INTEIRAMENTE "${title}" com IA?\n\nUse esta opção apenas quando o caso estiver incompatível ou precisar ser refeito. Estar em v1 não significa que o caso usa uma versão antiga do motor; v1 é apenas a primeira revisão deste conteúdo.\n\nSe estiver publicado, o caso voltará para DRAFT em uma nova versão e você precisará revisar e publicar novamente.`,
+      `Reconstruir INTEIRAMENTE "${title}" com IA?\n\nAntes de usar esta opção, veja o painel Saúde e reparos granulares acima. Retratos, NPCs, referências, intercorrências e audiência podem ser reparados separadamente com custo muito menor.\n\nUse reconstrução total apenas quando a estrutura principal do caso estiver realmente incompatível. Estar em v1 não significa motor antigo.\n\nSe estiver publicado, o caso voltará para DRAFT em uma nova versão e precisará ser revisado e publicado novamente.`,
     );
     if (!ok) { event.preventDefault(); return; }
     setWorking('regenerate');
@@ -24,23 +23,13 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
     setWorking('delete');
   }
 
-  function retryPortraits() {
-    setWorking('portraits');
-  }
-
   return (
     <div className={styles.box}>
       <div>
-        <h3>Manutenção do caso</h3>
-        <p>Reconstrua o caso inteiro somente se ele estiver incompatível com o contrato jogável atual. Para adicionar intercorrências e audiência, use o painel de mundo reativo acima.</p>
+        <h3>Manutenção avançada do caso</h3>
+        <p>Use esta área somente para reconstrução integral ou exclusão. Para falhas pontuais, utilize o diagnóstico e os reparos granulares acima para preservar conteúdo e economizar tokens.</p>
       </div>
       <div className={styles.actions}>
-        {status === 'draft' && <form action={retryCasePortraitsAction} onSubmit={retryPortraits}>
-          <input type="hidden" name="id" value={id} />
-          <button className={styles.regenerate} disabled={Boolean(working)}>
-            {working === 'portraits' ? 'Reprocessando retratos…' : 'Reprocessar retratos pendentes'}
-          </button>
-        </form>}
         <form action={regenerateCaseAction} onSubmit={confirmRegenerate}>
           <input type="hidden" name="id" value={id} />
           <button className={styles.regenerate} disabled={Boolean(working)}>
@@ -54,16 +43,10 @@ export default function CaseMaintenanceActions({ id, title, status, version }) {
           </button>
         </form>
       </div>
-      {working === 'portraits' && (
-        <div className={styles.progress} role="status" aria-live="polite">
-          <span className={styles.spinner} />
-          <div><strong>Reprocessando retratos pendentes…</strong><span>Somente personagens sem retrato serão enviados novamente para a IA. O conteúdo jurídico do caso não será alterado.</span></div>
-        </div>
-      )}
       {working === 'regenerate' && (
         <div className={styles.progress} role="status" aria-live="polite">
           <span className={styles.spinner} />
-          <div><strong>IA reconstruindo o caso…</strong><span>Reconstruindo locais, diálogos, pistas, estratégias e referências internas. Isso pode levar alguns minutos.</span></div>
+          <div><strong>IA reconstruindo o caso inteiro…</strong><span>Esta é a opção de último recurso: locais, diálogos, pistas, estratégias e referências serão reavaliados.</span></div>
         </div>
       )}
       <small>Versão do conteúdo: v{Number(version || 1)} • status: {status}. A numeração v1/v2/v3 registra revisões administrativas e não a versão do motor do jogo.</small>
