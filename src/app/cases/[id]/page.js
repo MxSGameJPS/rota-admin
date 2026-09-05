@@ -24,7 +24,7 @@ export default async function CaseEditorPage({ params, searchParams }) {
     {query?.created && <div className={styles.notice}>Draft gerado. O Admin já analisou NPCs, retratos e mundo reativo automaticamente; revise o diagnóstico antes de publicar.</div>}
     {query?.updated && <div className={styles.notice}>Rascunho salvo e validado.</div>}
     {query?.regenerated && <div className={styles.notice}>Caso reconstruído com IA e devolvido para draft. NPCs, retratos e mundo reativo também foram reavaliados.</div>}
-    {query?.reactiveGenerated && <div className={styles.notice}>Mundo reativo gerado com IA. Intercorrências e audiência específicas deste caso já estão disponíveis para o jogo.</div>}
+    {query?.reactiveGenerated && <div className={styles.notice}>Mundo reativo gerado com IA. Intercorrências e audiência específicas deste caso já estão disponíveis para revisão.</div>}
     {query?.portraitsRetried && <div className={styles.notice}>Retratos pendentes reprocessados. Personagens que já possuíam imagem foram preservados e o conteúdo jurídico do caso não foi alterado.</div>}
     {query?.repair === 'portraits' && <div className={styles.notice}>Reparo concluído: somente retratos pendentes foram reprocessados.</div>}
     {query?.repair === 'portrait-one' && <div className={styles.notice}>Retrato individual gerado sem alterar o restante do caso.</div>}
@@ -33,6 +33,9 @@ export default async function CaseEditorPage({ params, searchParams }) {
     {query?.repair === 'events' && <div className={styles.notice}>Somente as intercorrências foram geradas novamente. A audiência existente foi preservada quando válida.</div>}
     {query?.repair === 'hearing' && <div className={styles.notice}>Somente a audiência foi gerada novamente. Intercorrências e restante do caso foram preservados.</div>}
     {query?.repair === 'all' && <div className={styles.notice}>Pendências automáticas corrigidas de forma granular. O Admin executou apenas os reparos necessários.</div>}
+    {query?.pendingReview && <div className={styles.notice}>A correção foi gerada, mas o caso publicado no jogo ainda está preservado. Revise a pendência no diagnóstico e clique em “Publicar correção no jogo” para aplicá-la.</div>}
+    {query?.repairPublished && <div className={styles.notice}>Correção publicada com sucesso. O caso recebeu uma nova versão e o histórico anterior foi preservado.</div>}
+    {query?.repairDiscarded && <div className={styles.notice}>Correção pendente descartada. O caso publicado permaneceu inalterado.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
     <CaseHealthPanel id={id} status={model.status} health={health} />
