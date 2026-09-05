@@ -117,7 +117,18 @@ export async function repairReactiveEventsAction(formData) {
     const events = await generateCaseReactiveEvents(current);
     const existing = current.metadata?.reactiveWorld;
     const hearing = existing?.hearing ?? null;
-    const config = caseReactiveWorldSchema.parse({ version: 1, events, hearing });
+    const existingGeneration = existing?.generation && typeof existing.generation === 'object' ? existing.generation : {};
+    const config = caseReactiveWorldSchema.parse({
+      version: 1,
+      events,
+      hearing,
+      generation: {
+        eventsReady: true,
+        hearingReady: existing ? (existingGeneration.hearingReady ?? true) : false,
+        eventsGeneratedAt: new Date().toISOString(),
+        ...(existingGeneration.hearingGeneratedAt ? { hearingGeneratedAt: existingGeneration.hearingGeneratedAt } : {}),
+      },
+    });
     validateReactiveWorldReferences(config, current);
     const saved = await saveCaseReactiveWorld(id, config);
     revalidatePath(route);
@@ -137,7 +148,18 @@ export async function repairReactiveHearingAction(formData) {
     const events = Array.isArray(existing?.events) ? existing.events : [];
     if (!events.length) throw new Error('Gere primeiro as intercorrências; a audiência usa os eventos existentes apenas como contexto e o mundo reativo exige ao menos uma intercorrência.');
     const hearing = await generateCaseReactiveHearing(current, events);
-    const config = caseReactiveWorldSchema.parse({ version: 1, events, hearing });
+    const existingGeneration = existing?.generation && typeof existing.generation === 'object' ? existing.generation : {};
+    const config = caseReactiveWorldSchema.parse({
+      version: 1,
+      events,
+      hearing,
+      generation: {
+        eventsReady: true,
+        hearingReady: true,
+        eventsGeneratedAt: existingGeneration.eventsGeneratedAt || new Date().toISOString(),
+        hearingGeneratedAt: new Date().toISOString(),
+      },
+    });
     validateReactiveWorldReferences(config, current);
     const saved = await saveCaseReactiveWorld(id, config);
     revalidatePath(route);
@@ -186,7 +208,7 @@ export async function repairAllCasePendingAction(formData) {
       try {
         const parsedReactive = caseReactiveWorldSchema.parse(current.metadata.reactiveWorld);
         validateReactiveWorldReferences(parsedReactive, current);
-        reactiveValid = true;
+        reactiveValid = Boolean(parsedReactive.generation?.eventsReady !== false && parsedReactive.generation?.hearingReady !== false);
       } catch {}
     }
     if (!reactiveValid) {
