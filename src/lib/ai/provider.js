@@ -141,6 +141,15 @@ function buildCasePlanSystem(context) {
     'Crie entre 2 e 6 locais, entre 4 e 12 pistas e entre 2 e 5 estratégias. Prefira quantidade proporcional à dificuldade.',
     'Cada pista deve usar locationFoundId de um dos locais criados.',
     'Cada estratégia deve referenciar somente IDs de pistas existentes.',
+    'REGRA CRÍTICA DE REALISMO PROBATÓRIO: nem toda pista deve ajudar o jogador e nem toda prova deve ser autêntica. O caso precisa permitir erro humano real na seleção dos anexos.',
+    '- Em casos Iniciante, use de 0 a 1 pista potencialmente enganosa (inautêntica, irrelevante ou contraditória).',
+    '- Em casos Intermediário, inclua normalmente 1 a 2 pistas enganosas, sendo permitido pelo menos um item com isAuthentic=false quando narrativamente plausível.',
+    '- Em casos Avançado ou Complexo, inclua normalmente 2 a 4 pistas enganosas e pelo menos uma prova inautêntica quando houver forma juridicamente plausível de ela surgir.',
+    '- Uma prova com isAuthentic=false deve parecer inicialmente plausível: recibo adulterado, print manipulado, documento com inconsistência, depoimento fabricado, registro incompleto ou material cuja origem não resiste à conferência.',
+    '- Nunca torne uma pista isAuthentic=false obrigatória em requiredCrucialClueIds da estratégia ótima. O jogador cuidadoso deve conseguir vencer sem usar prova falsa.',
+    '- Use relevance=irrelevante para material verdadeiro que não ajuda juridicamente; use relevance=contraditoria para elemento autêntico que enfraquece uma hipótese ou exige revisão da tese.',
+    '- Quando uma prova for incompatível com uma estratégia específica, use incompatibleClueIds nessa estratégia. Isso permite ao motor judicial penalizar a incoerência entre tese e prova.',
+    '- A falsidade ou fragilidade precisa deixar sinais narrativos verificáveis em summary/fullDetail e nas interações do local, sem transformar a resposta correta em algo óbvio à primeira leitura.',
     'Se um local começar bloqueado, requiredClueOrDialogToUnlock deve apontar SOMENTE para uma pista existente nesta etapa.',
     'Se unlockedByDefault for true, OMITA requiredClueOrDialogToUnlock. Nunca envie string vazia e nunca envie null para campos opcionais de referência.',
     'Use chaves exatamente como definidas no schema; nunca traduza chaves para português.',
@@ -181,7 +190,7 @@ function plannedPersistentNpcsForLocation(plan, locationId) {
 
 function buildLocationSystem(plan, skeleton, context = {}) {
   const allLocations = plan.content.locations.map(item => ({ id: item.id, name: item.name, unlockedByDefault: item.unlockedByDefault }));
-  const clues = plan.content.availableClues.map(item => ({ id: item.id, title: item.title, summary: item.summary, locationFoundId: item.locationFoundId, relevance: item.relevance }));
+  const clues = plan.content.availableClues.map(item => ({ id: item.id, title: item.title, summary: item.summary, fullDetail: item.fullDetail, locationFoundId: item.locationFoundId, relevance: item.relevance, isAuthentic: item.isAuthentic }));
   const localClues = clues.filter(item => item.locationFoundId === skeleton.id);
   const preservationContext = buildRepairPreservationContext(context);
   const persistentHere = plannedPersistentNpcsForLocation(plan, skeleton.id);
@@ -200,6 +209,8 @@ function buildLocationSystem(plan, skeleton, context = {}) {
     'unlocksLocationId só pode usar EXATAMENTE IDs da lista TODOS OS LOCAIS fornecida abaixo. Nunca invente ID de local nesta etapa.',
     'Campos opcionais de referência sem valor devem ser OMITIDOS. Nunca use "" e nunca use null em requiredClueOrDialogToUnlock, revealsClueId, unlocksLocationId ou foundClueId.',
     'As pistas cujo locationFoundId é este local devem ser efetivamente descobríveis por diálogo ou searchable sempre que isso fizer sentido.',
+    'Se uma pista deste local tiver isAuthentic=false, crie contexto plausível para ela aparecer e, quando possível, sinais de inconsistência que um jogador atento possa perceber. Não diga diretamente em diálogo "esta prova é falsa"; permita que a desconfiança venha da investigação.',
+    'Pistas relevance=irrelevante ou contraditoria devem parecer suficientemente plausíveis para testar a seleção probatória, mas não podem bloquear a solução correta do caso.',
     'Evite criar diálogos longos demais; 1 a 3 personagens e 1 a 3 interações relevantes são suficientes na maioria dos locais.',
     preservationContext ? 'ESTE É UM REPARO DE CASO EXISTENTE: preserve os personagens centrais, seus nomes, papéis e relações narrativas, além do sentido das interações e diálogos originais sempre que forem compatíveis com o novo contrato. IDs antigos não precisam ser preservados.' : '',
     preservationContext ? 'CONTEXTO NARRATIVO ORIGINAL A PRESERVAR:' : '',
