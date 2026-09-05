@@ -22,6 +22,7 @@ export default async function CaseEditorPage({ params, searchParams }) {
     {query?.updated && <div className={styles.notice}>Rascunho salvo e validado.</div>}
     {query?.regenerated && <div className={styles.notice}>Caso reconstruído com IA e devolvido para draft. NPCs, retratos e mundo reativo também foram reavaliados.</div>}
     {query?.reactiveGenerated && <div className={styles.notice}>Mundo reativo gerado com IA. Intercorrências e audiência específicas deste caso já estão disponíveis para o jogo.</div>}
+    {query?.portraitsRetried && <div className={styles.notice}>Retratos pendentes reprocessados. Personagens que já possuíam imagem foram preservados e o conteúdo jurídico do caso não foi alterado.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
     {(generatedNpcDrafts.length > 0 || Number(automation.localPortraitsGenerated || 0) > 0 || warnings.length > 0) && <div className={styles.panel}>
