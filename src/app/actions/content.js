@@ -60,6 +60,59 @@ async function attachGeneratedReactiveWorld(caseModel) {
   }
 }
 
+function compactRepairCase(current) {
+  const content = current?.content && typeof current.content === 'object' ? current.content : {};
+  const locations = Array.isArray(content.locations) ? content.locations : [];
+  const clues = Array.isArray(content.availableClues) ? content.availableClues : [];
+  const strategies = Array.isArray(content.strategies) ? content.strategies : [];
+
+  return {
+    id: current.id,
+    code: current.code,
+    title: current.title,
+    area: current.area,
+    difficulty: current.difficulty,
+    difficultyStars: current.difficultyStars,
+    deadlineHours: current.deadlineHours,
+    client: content.client,
+    briefing: content.briefing,
+    locations: locations.map((location) => ({
+      id: location.id,
+      name: location.name,
+      category: location.category,
+      description: location.description,
+      address: location.address,
+      characters: Array.isArray(location.characters)
+        ? location.characters.map((character) => ({
+            id: character.id,
+            name: character.name,
+            role: character.role,
+            initialDialogue: character.initialDialogue,
+          }))
+        : [],
+    })),
+    availableClues: clues.map((clue) => ({
+      id: clue.id,
+      title: clue.title,
+      type: clue.type,
+      relevance: clue.relevance,
+      isAuthentic: clue.isAuthentic,
+      summary: clue.summary,
+      legalSignificance: clue.legalSignificance,
+      locationFoundId: clue.locationFoundId,
+    })),
+    strategies: strategies.map((strategy) => ({
+      id: strategy.id,
+      title: strategy.title,
+      description: strategy.description,
+      isOptimal: strategy.isOptimal,
+      requiredCrucialClueIds: strategy.requiredCrucialClueIds || [],
+      incompatibleClueIds: strategy.incompatibleClueIds || [],
+    })),
+    npcAssignments: Array.isArray(content.npcAssignments) ? content.npcAssignments : [],
+  };
+}
+
 export async function generateDraftAction(entityType, formData) {
   const prompt = String(formData.get('prompt') || '').trim();
   if (prompt.length < 10) fail(routeByType[entityType], 'Descreva melhor o conteúdo.');
@@ -128,20 +181,22 @@ export async function regenerateCaseAction(formData) {
   try {
     const current = await getEntityForEditor('case', id);
     const publishedNpcs = await listPublishedNpcGenerationContext();
+    const repairContext = compactRepairCase(current);
     const repairPrompt = [
-      'REGENERE E REPARE este caso existente do Rota da Justiça.',
+      'RECONSTRUA E REPARE este caso existente do Rota da Justiça para o contrato jogável atual.',
       'Preserve a premissa, os personagens centrais, a área, a dificuldade e a identidade narrativa sempre que possível.',
       'Preserve também vínculos de NPCs persistentes que continuarem coerentes com a nova estrutura.',
-      'Reconstrua completamente a estrutura para que seja jogável no motor atual.',
       'Não traduza nomes de propriedades do schema para português.',
-      'Crie locais investigáveis, personagens locais, diálogos, pontos pesquisáveis, pistas e estratégias coerentes entre si.',
+      'Reconstrua locais investigáveis, personagens locais, diálogos, pontos pesquisáveis, pistas e estratégias coerentes entre si.',
       'Todos os IDs e referências internas precisam existir e fechar corretamente.',
       'Todo personagem local conversável precisa de appearanceProfile para geração automática do retrato.',
       'O id e o code serão preservados pelo servidor; concentre-se em reparar o conteúdo.',
-      'CASO ATUAL A SER REPARADO:',
-      JSON.stringify(current),
+      'PARA EVITAR TRUNCAMENTO, seja objetivo: prefira 2 a 4 locais, 4 a 8 pistas, 2 a 4 estratégias, 1 a 2 personagens por local e 1 a 3 interações relevantes por personagem.',
+      'Não repita fatos em vários campos. Preserve riqueza jurídica, mas mantenha textos narrativos concisos.',
+      'RESUMO ESTRUTURADO DO CASO ATUAL A PRESERVAR:',
+      JSON.stringify(repairContext),
     ].join('\n\n');
-    const generated = await generateStructured('case', repairPrompt, { publishedNpcs, repairCase: current });
+    const generated = await generateStructured('case', repairPrompt, { publishedNpcs, repairCase: repairContext });
     let parsed = ENTITY_SCHEMAS.case.parse({
       ...generated,
       id: current.id,
