@@ -57,10 +57,18 @@ export const caseReactiveHearingStageSchema = z.object({
   hearing: hearingSchema.nullable().default(null),
 });
 
+const generationStateSchema = z.object({
+  eventsReady: z.boolean().default(true),
+  hearingReady: z.boolean().default(true),
+  eventsGeneratedAt: z.string().min(10).optional(),
+  hearingGeneratedAt: z.string().min(10).optional(),
+}).optional();
+
 export const caseReactiveWorldSchema = z.object({
   version: z.literal(1).default(1),
   events: z.array(eventSchema).min(1).max(5),
   hearing: hearingSchema.nullable().default(null),
+  generation: generationStateSchema,
 }).superRefine((data, ctx) => {
   const eventIds = new Set();
   for (const [eventIndex, event] of data.events.entries()) {
