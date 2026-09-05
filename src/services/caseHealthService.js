@@ -50,6 +50,7 @@ export async function analyzeCaseHealth(caseModel) {
   let reactiveValid = false;
   let reactiveIssue = '';
   let eventsCount = 0;
+  let eventsState = reactiveRaw ? 'missing' : 'missing';
   let hearingRounds = 0;
   let hearingState = reactiveRaw ? 'not_required' : 'missing';
 
@@ -57,13 +58,19 @@ export async function analyzeCaseHealth(caseModel) {
     try {
       const parsed = caseReactiveWorldSchema.parse(reactiveRaw);
       validateReactiveWorldReferences(parsed, caseModel);
-      reactiveValid = true;
+      const generation = parsed.generation || {};
+      const eventsReady = generation.eventsReady ?? true;
+      const hearingReady = generation.hearingReady ?? true;
+      reactiveValid = eventsReady && hearingReady;
       eventsCount = parsed.events.length;
+      eventsState = eventsReady && eventsCount > 0 ? 'ready' : 'missing';
       hearingRounds = parsed.hearing?.rounds?.length || 0;
-      hearingState = parsed.hearing ? 'ready' : 'not_required';
+      hearingState = !hearingReady ? 'missing' : (parsed.hearing ? 'ready' : 'not_required');
+      if (!reactiveValid) reactiveIssue = 'O mundo reativo possui microetapas ainda não concluídas.';
     } catch (error) {
       reactiveIssue = error?.message || 'Mundo reativo inválido.';
       eventsCount = Array.isArray(reactiveRaw?.events) ? reactiveRaw.events.length : 0;
+      eventsState = eventsCount > 0 ? 'ready' : 'missing';
       hearingRounds = Array.isArray(reactiveRaw?.hearing?.rounds) ? reactiveRaw.hearing.rounds.length : 0;
       hearingState = reactiveRaw?.hearing ? 'invalid' : 'missing';
     }
@@ -109,7 +116,7 @@ export async function analyzeCaseHealth(caseModel) {
       valid: reactiveValid,
       issue: reactiveIssue,
       eventsCount,
-      eventsState: eventsCount > 0 ? 'ready' : 'missing',
+      eventsState,
       hearingRounds,
       hearingState,
     },
@@ -119,7 +126,7 @@ export async function analyzeCaseHealth(caseModel) {
       npcs: npcNeeds.length > 0 || Boolean(npcIssue),
       references: referenceIssues.length > 0,
       reactiveWorld: !reactiveRaw || !reactiveValid,
-      events: eventsCount === 0 || !reactiveValid,
+      events: eventsState === 'missing',
       hearing: hearingState === 'missing' || hearingState === 'invalid',
     },
   };
