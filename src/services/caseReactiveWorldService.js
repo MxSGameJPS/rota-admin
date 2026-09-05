@@ -102,6 +102,26 @@ export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
   return validateReactiveWorldReferences(parsed, caseModel);
 }
 
+async function snapshotPublishedVersionIfNeeded(client, caseId, version, current) {
+  const { data: existing, error: lookupError } = await client
+    .from('content_versions')
+    .select('id')
+    .eq('entity_type', 'case')
+    .eq('entity_id', String(caseId))
+    .eq('version', version)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return;
+
+  const { error: versionError } = await client.from('content_versions').insert({
+    entity_type: 'case',
+    entity_id: String(caseId),
+    version,
+    snapshot: current,
+  });
+  if (versionError) throw versionError;
+}
+
 export async function saveCaseReactiveWorld(caseId, config) {
   const client = requireClient();
   const { data: current, error: readError } = await client.from('cases').select('*').eq('id', caseId).single();
@@ -112,13 +132,7 @@ export async function saveCaseReactiveWorld(caseId, config) {
   const nextVersion = current.status === 'published' ? currentVersion + 1 : currentVersion;
 
   if (current.status === 'published') {
-    const { error: versionError } = await client.from('content_versions').insert({
-      entity_type: 'case',
-      entity_id: String(caseId),
-      version: currentVersion,
-      snapshot: current,
-    });
-    if (versionError) throw versionError;
+    await snapshotPublishedVersionIfNeeded(client, caseId, currentVersion, current);
   }
 
   const { error: updateError } = await client
