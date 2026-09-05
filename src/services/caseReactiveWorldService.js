@@ -206,7 +206,12 @@ export async function generateCaseReactiveEvents(caseModel, extraPrompt = '') {
     compactHint: 'Use 1 ou 2 intercorrências, 2 escolhas por intercorrência e textos curtos.',
   });
   const eventsStage = caseReactiveEventsStageSchema.parse(rawEvents);
-  const validationShell = caseReactiveWorldSchema.parse({ version: 1, events: eventsStage.events, hearing: null });
+  const validationShell = caseReactiveWorldSchema.parse({
+    version: 1,
+    events: eventsStage.events,
+    hearing: null,
+    generation: { eventsReady: true, hearingReady: false, eventsGeneratedAt: new Date().toISOString() },
+  });
   validateReactiveWorldReferences(validationShell, caseModel);
   return eventsStage.events;
 }
@@ -233,11 +238,19 @@ export async function generateCaseReactiveHearing(caseModel, events = [], extraP
 
 export async function generateCaseReactiveWorld(caseModel, extraPrompt = '') {
   const events = await generateCaseReactiveEvents(caseModel, extraPrompt);
+  const eventsGeneratedAt = new Date().toISOString();
   const hearing = await generateCaseReactiveHearing(caseModel, events, extraPrompt);
+  const hearingGeneratedAt = new Date().toISOString();
   const parsed = caseReactiveWorldSchema.parse({
     version: 1,
     events,
     hearing,
+    generation: {
+      eventsReady: true,
+      hearingReady: true,
+      eventsGeneratedAt,
+      hearingGeneratedAt,
+    },
   });
   return validateReactiveWorldReferences(parsed, caseModel);
 }
@@ -293,6 +306,7 @@ export async function saveCaseReactiveWorld(caseId, config) {
       version: nextVersion,
       events: config.events.length,
       hearingRounds: config.hearing?.rounds?.length || 0,
+      generation: config.generation || null,
       source: 'ai-generator',
     },
   });
