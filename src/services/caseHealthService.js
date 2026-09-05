@@ -19,10 +19,35 @@ function localCharacters(caseModel) {
         locationId: location.id,
         locationName: location.name,
         hasPortrait: Boolean(character.portraitSrc),
+        portraitSrc: character.portraitSrc || '',
       });
     }
   }
   return result;
+}
+
+function pendingPortraitChanges(caseModel, pending) {
+  const candidateContent = pending?.candidate?.content;
+  if (!candidateContent) return [];
+  const liveByKey = new Map(localCharacters(caseModel).map((item) => [`${item.locationId}::${item.id}`, item]));
+  const changes = [];
+  for (const location of candidateContent.locations || []) {
+    for (const character of location.characters || []) {
+      if (!character?.portraitSrc) continue;
+      const key = `${location.id}::${character.id}`;
+      const live = liveByKey.get(key);
+      if (live?.portraitSrc === character.portraitSrc) continue;
+      changes.push({
+        id: character.id,
+        name: character.name,
+        role: character.role,
+        locationId: location.id,
+        locationName: location.name,
+        portraitSrc: character.portraitSrc,
+      });
+    }
+  }
+  return changes;
 }
 
 export async function analyzeCaseHealth(caseModel) {
@@ -50,7 +75,6 @@ export async function analyzeCaseHealth(caseModel) {
   let reactiveValid = false;
   let reactiveIssue = '';
   let eventsCount = 0;
-  let eventsState = reactiveRaw ? 'missing' : 'missing';
   let hearingRounds = 0;
   let hearingState = reactiveRaw ? 'not_required' : 'missing';
 
@@ -58,19 +82,14 @@ export async function analyzeCaseHealth(caseModel) {
     try {
       const parsed = caseReactiveWorldSchema.parse(reactiveRaw);
       validateReactiveWorldReferences(parsed, caseModel);
-      const generation = parsed.generation || {};
-      const eventsReady = generation.eventsReady ?? true;
-      const hearingReady = generation.hearingReady ?? true;
-      reactiveValid = eventsReady && hearingReady;
+      reactiveValid = true;
       eventsCount = parsed.events.length;
-      eventsState = eventsReady && eventsCount > 0 ? 'ready' : 'missing';
       hearingRounds = parsed.hearing?.rounds?.length || 0;
-      hearingState = !hearingReady ? 'missing' : (parsed.hearing ? 'ready' : 'not_required');
-      if (!reactiveValid) reactiveIssue = 'O mundo reativo possui microetapas ainda não concluídas.';
+      if (parsed.generation?.hearingReady === false) hearingState = 'missing';
+      else hearingState = parsed.hearing ? 'ready' : 'not_required';
     } catch (error) {
       reactiveIssue = error?.message || 'Mundo reativo inválido.';
       eventsCount = Array.isArray(reactiveRaw?.events) ? reactiveRaw.events.length : 0;
-      eventsState = eventsCount > 0 ? 'ready' : 'missing';
       hearingRounds = Array.isArray(reactiveRaw?.hearing?.rounds) ? reactiveRaw.hearing.rounds.length : 0;
       hearingState = reactiveRaw?.hearing ? 'invalid' : 'missing';
     }
@@ -79,6 +98,23 @@ export async function analyzeCaseHealth(caseModel) {
   const warnings = Array.isArray(caseModel?.metadata?.automation?.warnings)
     ? caseModel.metadata.automation.warnings
     : [];
+
+  const pendingRaw = caseModel?.metadata?.pendingGranularRepair;
+  const pending = pendingRaw?.candidate?.content ? {
+    exists: true,
+    type: pendingRaw.type || 'granular',
+    summary: pendingRaw.summary || 'Correção granular pronta para revisão.',
+    createdAt: pendingRaw.createdAt || '',
+    baseVersion: Number(pendingRaw.baseVersion || 0),
+    newPortraits: pendingPortraitChanges(caseModel, pendingRaw),
+  } : {
+    exists: false,
+    type: '',
+    summary: '',
+    createdAt: '',
+    baseVersion: 0,
+    newPortraits: [],
+  };
 
   const needsRepair = Boolean(
     structuralIssues.length
@@ -116,17 +152,18 @@ export async function analyzeCaseHealth(caseModel) {
       valid: reactiveValid,
       issue: reactiveIssue,
       eventsCount,
-      eventsState,
+      eventsState: eventsCount > 0 ? 'ready' : 'missing',
       hearingRounds,
       hearingState,
     },
+    pending,
     warnings,
     repairable: {
       portraits: missingPortraits.length > 0 || generatedNpcPortraitsMissing.length > 0,
       npcs: npcNeeds.length > 0 || Boolean(npcIssue),
       references: referenceIssues.length > 0,
       reactiveWorld: !reactiveRaw || !reactiveValid,
-      events: eventsState === 'missing',
+      events: eventsCount === 0 || !reactiveValid,
       hearing: hearingState === 'missing' || hearingState === 'invalid',
     },
   };
