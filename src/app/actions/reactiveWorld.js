@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getEntityForEditor } from '@/services/contentService';
+import { savePendingCaseRepair } from '@/services/caseMaintenanceService';
 import {
   generateCaseReactiveWorld,
   saveCaseReactiveWorld,
@@ -17,6 +18,20 @@ export async function generateCaseReactiveWorldAction(formData) {
   try {
     const current = await getEntityForEditor('case', id);
     const config = await generateCaseReactiveWorld(current, extraPrompt);
+
+    if (current.status === 'published') {
+      await savePendingCaseRepair(id, {
+        ...current,
+        metadata: { ...(current.metadata || {}), reactiveWorld: config },
+      }, {
+        type: 'reactive-world',
+        summary: `Mundo reativo específico regenerado (${config.events.length} intercorrência(s) e ${config.hearing?.rounds?.length || 0} etapa(s) de audiência).`,
+      });
+      revalidatePath(route);
+      revalidatePath('/cases');
+      redirect(`${route}?reactiveGenerated=1&pendingReview=1`);
+    }
+
     const saved = await saveCaseReactiveWorld(id, config);
     revalidatePath(route);
     revalidatePath('/cases');
