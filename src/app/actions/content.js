@@ -21,11 +21,44 @@ import {
   automateGeneratedCaseAssets,
   automateGeneratedNpcPortrait,
 } from '@/services/caseAssetAutomationService';
+import { generateCaseReactiveWorld } from '@/services/caseReactiveWorldService';
 import { deleteCasePermanently, replaceCaseWithRegeneratedDraft } from '@/services/caseMaintenanceService';
 
 const routeByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const detailByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const fail = (route, message) => redirect(`${route}?error=${encodeURIComponent(message)}`);
+
+async function attachGeneratedReactiveWorld(caseModel) {
+  try {
+    const reactiveWorld = await generateCaseReactiveWorld(caseModel);
+    return ENTITY_SCHEMAS.case.parse({
+      ...caseModel,
+      metadata: {
+        ...(caseModel.metadata || {}),
+        reactiveWorld,
+      },
+    });
+  } catch (error) {
+    const metadata = caseModel.metadata || {};
+    const automation = metadata.automation && typeof metadata.automation === 'object'
+      ? metadata.automation
+      : {};
+    const warnings = Array.isArray(automation.warnings) ? automation.warnings : [];
+    return ENTITY_SCHEMAS.case.parse({
+      ...caseModel,
+      metadata: {
+        ...metadata,
+        automation: {
+          ...automation,
+          warnings: [
+            ...warnings,
+            `O caso foi criado, mas o mundo reativo específico não pôde ser gerado automaticamente: ${error.message || 'falha desconhecida'}. Use o painel Mundo reativo específico do caso para tentar novamente.`,
+          ],
+        },
+      },
+    });
+  }
+}
 
 export async function generateDraftAction(entityType, formData) {
   const prompt = String(formData.get('prompt') || '').trim();
@@ -42,6 +75,7 @@ export async function generateDraftAction(entityType, formData) {
       parsed = await automateGeneratedCaseAssets(parsed, { publishedNpcs: context.publishedNpcs });
       parsed = ENTITY_SCHEMAS.case.parse(parsed);
       await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
+      parsed = await attachGeneratedReactiveWorld(parsed);
     } else if (entityType === 'npc') {
       parsed = await automateGeneratedNpcPortrait(parsed);
       parsed = ENTITY_SCHEMAS.npc.parse(parsed);
@@ -117,6 +151,7 @@ export async function regenerateCaseAction(formData) {
     parsed = await automateGeneratedCaseAssets(parsed, { publishedNpcs });
     parsed = ENTITY_SCHEMAS.case.parse(parsed);
     await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
+    parsed = await attachGeneratedReactiveWorld(parsed);
     const result = await replaceCaseWithRegeneratedDraft(id, parsed);
     revalidatePath('/cases');
     revalidatePath('/npcs');
