@@ -16,11 +16,11 @@ export default async function CaseEditorPage({ params, searchParams }) {
 
   return <div className={styles.page}>
     <div className={styles.header}>
-      <div><Link href="/cases">← Casos</Link><h2>{model.title}</h2><p>{model.code} • {model.status}</p></div>
+      <div><Link href="/cases">← Casos</Link><h2>{model.title}</h2><p>{model.code} • {model.status} • v{Number(model.version || 1)}</p></div>
     </div>
     {query?.created && <div className={styles.notice}>Draft gerado. O Admin já analisou NPCs e retratos automaticamente; revise o resultado antes de publicar.</div>}
     {query?.updated && <div className={styles.notice}>Rascunho salvo e validado.</div>}
-    {query?.regenerated && <div className={styles.notice}>Caso regenerado com IA e devolvido para draft. NPCs e retratos também foram reavaliados.</div>}
+    {query?.regenerated && <div className={styles.notice}>Caso reconstruído com IA e devolvido para draft. NPCs, retratos e mundo reativo também foram reavaliados.</div>}
     {query?.reactiveGenerated && <div className={styles.notice}>Mundo reativo gerado com IA. Intercorrências e audiência específicas deste caso já estão disponíveis para o jogo.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
@@ -40,7 +40,7 @@ export default async function CaseEditorPage({ params, searchParams }) {
     </div>}
 
     <CaseReactiveWorldPanel model={model}/>
-    <CaseMaintenanceActions id={id} title={model.title} status={model.status}/>
+    <CaseMaintenanceActions id={id} title={model.title} status={model.status} version={model.version}/>
     <JsonEditor entityType="case" id={id} value={model} status={model.status}/>
   </div>;
 }
