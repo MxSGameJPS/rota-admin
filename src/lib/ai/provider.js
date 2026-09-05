@@ -1,6 +1,7 @@
 import { getAIContract, caseSchema } from '@/schemas/contracts';
 import { casePlanSchema, caseLocationDetailSchema, CASE_PLAN_SCHEMA_JSON, CASE_LOCATION_SCHEMA_JSON } from '@/schemas/caseGeneration';
 import { generateTemplate } from './templates';
+import { normalizeLocationReferences } from './referenceNormalizer';
 import { generateWithDefaultProvider } from '@/services/ai/providerService';
 
 const STRUCTURED_GENERATION_TIMEOUT_MS = 300000;
@@ -195,8 +196,8 @@ function buildLocationSystem(plan, skeleton, context = {}) {
     'OMITA portraitSrc, portraitStoragePath e portraitGeneratedAt. O servidor gera e salva o retrato depois que o JSON estiver validado.',
     `REGRA CRÍTICA DE IDs: todos os IDs NOVOS criados dentro deste local para personagens, diálogos e searchables devem começar com o prefixo "${skeleton.id}-". Não use IDs genéricos como character-1, dialogue-1 ou searchable-1.`,
     'Dentro deste local, nenhum ID pode se repetir.',
-    'revealsClueId e foundClueId só podem usar IDs da lista de pistas fornecida.',
-    'unlocksLocationId só pode usar IDs da lista de locais fornecida.',
+    'revealsClueId e foundClueId só podem usar EXATAMENTE IDs da lista TODAS AS PISTAS fornecida abaixo. Nunca invente ID de pista nesta etapa.',
+    'unlocksLocationId só pode usar EXATAMENTE IDs da lista TODOS OS LOCAIS fornecida abaixo. Nunca invente ID de local nesta etapa.',
     'Campos opcionais de referência sem valor devem ser OMITIDOS. Nunca use "" e nunca use null em requiredClueOrDialogToUnlock, revealsClueId, unlocksLocationId ou foundClueId.',
     'As pistas cujo locationFoundId é este local devem ser efetivamente descobríveis por diálogo ou searchable sempre que isso fizer sentido.',
     'Evite criar diálogos longos demais; 1 a 3 personagens e 1 a 3 interações relevantes são suficientes na maioria dos locais.',
@@ -226,15 +227,16 @@ async function generateCaseStructured(prompt, context) {
   for (const skeleton of plan.content.locations) {
     const rawLocation = await requestParsedJson({
       systemPrompt: buildLocationSystem(plan, skeleton, context),
-      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-. Omita campos opcionais de referência que não tenham valor.`,
-      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-. Todo character precisa de appearanceProfile. Nunca use string vazia ou null em referências opcionais.`,
+      prompt: `Complete somente o local ${skeleton.id} (${skeleton.name}). Todos os IDs internos novos devem usar o prefixo ${skeleton.id}-. Omita campos opcionais de referência que não tenham valor. Use somente IDs de pistas e locais já existentes no plano.`,
+      retryHint: `Reduza a quantidade de diálogos, não a estrutura obrigatória. Garanta que todos os IDs internos novos comecem com ${skeleton.id}-. Todo character precisa de appearanceProfile. Nunca invente IDs em foundClueId, revealsClueId ou unlocksLocationId.`,
     });
     const parsedLocation = caseLocationDetailSchema.parse(normalizeCaseOptionalReferences(rawLocation));
+    const reconciledLocation = normalizeLocationReferences(parsedLocation, plan);
     detailedLocations.push({
-      ...parsedLocation,
+      ...reconciledLocation,
       ...skeleton,
-      characters: parsedLocation.characters,
-      searchables: parsedLocation.searchables,
+      characters: reconciledLocation.characters,
+      searchables: reconciledLocation.searchables,
     });
   }
 
