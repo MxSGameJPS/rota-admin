@@ -1,7 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   discardPendingCaseRepairAction,
   publishPendingCaseRepairAction,
@@ -28,7 +29,10 @@ function ActionButton({ action, id, label, working, setWorking, token, children,
 }
 
 export default function CaseHealthPanel({ id, status, health }) {
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
   const [working, setWorking] = useState('');
+  const [workingWarning, setWorkingWarning] = useState('');
   const draft = status === 'draft';
   const published = status === 'published';
   const portraitsMissing = Number(health?.portraits?.missing?.length || 0) + Number(health?.portraits?.generatedNpcPortraitsMissing?.length || 0);
@@ -37,6 +41,28 @@ export default function CaseHealthPanel({ id, status, health }) {
   const reactiveHealthy = Boolean(health?.reactive?.present && health?.reactive?.valid);
   const eventsReady = Number(health?.reactive?.eventsCount || 0) > 0;
   const hasPending = Boolean(health?.pending?.exists);
+
+  // Server Actions deste painel redirecionam de volta para a mesma rota. O Next pode
+  // preservar o estado do componente nessa navegação; sem este reset, `working`
+  // permanece preenchido mesmo depois de a operação ter concluído com sucesso.
+  useEffect(() => {
+    setWorking('');
+    setWorkingWarning('');
+  }, [searchKey, health]);
+
+  // Rede/IA nunca deve deixar o Admin visualmente bloqueado para sempre. Esse
+  // watchdog libera a interface e orienta a conferir o estado salvo antes de repetir.
+  useEffect(() => {
+    if (!working) return undefined;
+
+    setWorkingWarning('');
+    const timer = window.setTimeout(() => {
+      setWorking('');
+      setWorkingWarning('A operação ultrapassou 3 minutos. O painel foi destravado. Atualize o status do caso antes de repetir a ação, pois o processamento pode ter concluído no servidor.');
+    }, 180000);
+
+    return () => window.clearTimeout(timer);
+  }, [working]);
 
   return <section className={styles.panel}>
     <div className={styles.heading}>
@@ -156,5 +182,6 @@ export default function CaseHealthPanel({ id, status, health }) {
 
     {draft && <small className={styles.draftHint}>Este caso está em draft. Reparos são salvos diretamente no rascunho; depois use o fluxo normal de publicação do caso.</small>}
     {working && <div className={styles.progress}><span className={styles.spinner} /><span>Executando somente o reparo selecionado. O restante do caso será preservado.</span></div>}
+    {workingWarning && <div className={styles.problem}><strong>Operação demorada:</strong> {workingWarning} <button type="button" onClick={() => window.location.reload()}>Atualizar status</button></div>}
   </section>;
 }
