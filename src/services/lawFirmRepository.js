@@ -126,6 +126,18 @@ export async function getLawFirm(id) {
   };
 }
 
+export async function updateLawFirmRecruitment(id, recruitment) {
+  const supabase = client();
+  const { data, error } = await supabase
+    .from('law_firms')
+    .update({ recruitment })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function publishLawFirmGraph(id, memberNpcIdsToPublish = []) {
   const supabase = client();
   if (memberNpcIdsToPublish.length) {
