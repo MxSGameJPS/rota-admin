@@ -5,6 +5,7 @@ const links = [
   ['/', 'Dashboard'],
   ['/cases', 'Casos'],
   ['/npcs', 'NPCs'],
+  ['/law-firms', 'Escritórios'],
   ['/establishments', 'Estabelecimentos'],
   ['/exams', 'Exames & Concursos'],
   ['/economy', 'Economia'],
