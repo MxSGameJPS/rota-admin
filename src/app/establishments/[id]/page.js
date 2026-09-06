@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import StatusBadge from '@/components/StatusBadge/StatusBadge';
 import {
+  AD_SLOT_TYPES,
   BUSINESS_TYPES,
   GAME_USE_TYPES,
   OFFER_TYPES,
@@ -10,8 +11,10 @@ import {
 import { hasEstablishmentImageGenerationConfigured } from '@/services/establishmentMediaService';
 import {
   archiveEstablishmentAction,
+  createEstablishmentAdSlotAction,
   createOfferAction,
   generateEstablishmentMediaAction,
+  generateEstablishmentOfferImageAction,
   publishEstablishmentAction,
   updateEstablishmentAction,
 } from '@/app/actions/establishments';
@@ -35,6 +38,10 @@ const offerLabels = {
 
 const periodLabels = { NONE: 'Sem período', HOUR: 'Por hora', DAY: 'Por dia', MONTH: 'Por mês', ONE_TIME: 'Pagamento único' };
 const mediaLabels = { LOGO: 'Logo', BANNER_HORIZONTAL: 'Banner horizontal', BANNER_VERTICAL: 'Banner vertical', FACADE: 'Fachada', INTERIOR: 'Interior', GALLERY: 'Galeria', PROMO: 'Promocional' };
+const adSlotLabels = {
+  BILLBOARD: 'Outdoor / painel', INTERIOR: 'Mídia interna', MAP_HIGHLIGHT: 'Destaque no mapa',
+  LOADING_BANNER: 'Banner de loading', LISTING_SPOTLIGHT: 'Destaque em listagem', FACADE_SIGN: 'Placa de fachada',
+};
 
 function money(value) {
   if (value == null) return 'Sob consulta';
@@ -48,6 +55,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     getEstablishment(id),
     hasEstablishmentImageGenerationConfigured(),
   ]);
+  const canGenerateAiMedia = imageConfigured && item.is_fictional;
 
   return <div className={styles.page}>
     <div className={styles.header}>
@@ -64,6 +72,8 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     {query?.saved && <div className={styles.notice}>Alterações salvas.</div>}
     {query?.published && <div className={styles.notice}>Estabelecimento publicado para o game.</div>}
     {query?.offerCreated && <div className={styles.notice}>Oferta adicionada.</div>}
+    {query?.offerImageGenerated && <div className={styles.notice}>Imagem da oferta gerada e vinculada.</div>}
+    {query?.adSlotCreated && <div className={styles.notice}>Slot publicitário criado.</div>}
     {query?.mediaGenerated && <div className={styles.notice}>Mídia {query.mediaGenerated} gerada e vinculada.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
@@ -114,11 +124,12 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
 
     <section className={styles.panel}>
       <h3>Mídia e identidade visual</h3>
-      <p>As imagens geradas agora são fictícias. Quando houver patrocinador real, você poderá substituir os assets pelos arquivos oficiais da marca.</p>
+      <p>As imagens geradas agora são fictícias. Quando houver empresa real, a geração por IA é bloqueada para evitar representar uma marca verdadeira com material inventado; use assets oficiais autorizados.</p>
       {!imageConfigured && <div className={styles.warningList}>Geração de imagens não configurada. Configure um provedor de imagem em Configurações de IA.</div>}
+      {!item.is_fictional && <div className={styles.warningList}>Estabelecimento marcado como real: geração visual por IA bloqueada. Cadastre futuramente os materiais oficiais da empresa.</div>}
       <div className={styles.formGrid}>
         {['LOGO', 'BANNER_HORIZONTAL', 'FACADE', 'INTERIOR'].map(type => <form key={type} action={generateEstablishmentMediaAction.bind(null, id, type)}>
-          <button className={styles.secondary} disabled={!imageConfigured}>Gerar {mediaLabels[type]}</button>
+          <button className={styles.secondary} disabled={!canGenerateAiMedia}>Gerar {mediaLabels[type]}</button>
         </form>)}
       </div>
       {item.media.length === 0 ? <div className={styles.empty}>Nenhuma mídia vinculada.</div> : <div className={styles.assetList}>
@@ -131,10 +142,17 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
 
     <section className={styles.panel}>
       <h3>Ofertas e serviços jogáveis</h3>
-      <p>Esses itens viram ações econômicas no game: aluguel de sala, hospedagem, compra de veículo, locação de carro e outros serviços.</p>
+      <p>Esses itens viram ações econômicas no game: aluguel de sala, hospedagem, compra de veículo, locação de carro e outros serviços. Cada oferta fictícia pode receber sua própria imagem gerada pela IA.</p>
       {item.offers.length > 0 && <div className={styles.tableWrap}><table className={styles.table}>
-        <thead><tr><th>Oferta</th><th>Tipo</th><th>Preço</th><th>Período</th><th>Disponível</th></tr></thead>
-        <tbody>{item.offers.map(offer => <tr key={offer.id}><td><strong>{offer.title}</strong><br/>{offer.description}</td><td>{offerLabels[offer.offer_type] || offer.offer_type}</td><td>{money(offer.price)}</td><td>{periodLabels[offer.period_type] || offer.period_type}</td><td>{offer.is_available ? 'Sim' : 'Não'}</td></tr>)}</tbody>
+        <thead><tr><th>Oferta</th><th>Tipo</th><th>Preço</th><th>Período</th><th>Imagem</th><th>Disponível</th></tr></thead>
+        <tbody>{item.offers.map(offer => <tr key={offer.id}>
+          <td><strong>{offer.title}</strong><br/>{offer.description}</td>
+          <td>{offerLabels[offer.offer_type] || offer.offer_type}</td>
+          <td>{money(offer.price)}</td>
+          <td>{periodLabels[offer.period_type] || offer.period_type}</td>
+          <td>{offer.image_url ? <a href={offer.image_url} target="_blank" rel="noreferrer"><img className={styles.assetThumb} src={offer.image_url} alt={offer.title} /></a> : <form action={generateEstablishmentOfferImageAction.bind(null, id, offer.id)}><button className={styles.secondary} disabled={!canGenerateAiMedia}>Gerar imagem</button></form>}</td>
+          <td>{offer.is_available ? 'Sim' : 'Não'}</td>
+        </tr>)}</tbody>
       </table></div>}
       <form className={styles.form} action={createOfferAction.bind(null, id)}>
         <div className={styles.formGrid}>
@@ -150,11 +168,22 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
 
     <section className={styles.panel}>
       <h3>Inventário publicitário</h3>
-      <p>Slots já ficam preparados para monetização futura sem transformar o conteúdo fictício atual em publicidade real.</p>
+      <p>Os slots representam locais comercializáveis dentro do game. Hoje servem como planejamento; amanhã podem receber campanha, contrato, preço e métricas de exposição.</p>
       {item.adSlots.length === 0 ? <div className={styles.empty}>Nenhum slot publicitário cadastrado.</div> : <div className={styles.tableWrap}><table className={styles.table}>
-        <thead><tr><th>Slot</th><th>Posicionamento</th><th>Descrição</th><th>Ativo</th></tr></thead>
-        <tbody>{item.adSlots.map(slot => <tr key={slot.id}><td>{slot.slot_type}</td><td>{slot.placement_key}</td><td>{slot.description}</td><td>{slot.is_active ? 'Sim' : 'Não'}</td></tr>)}</tbody>
+        <thead><tr><th>Slot</th><th>Posicionamento</th><th>Descrição</th><th>Dimensão</th><th>Preço sugerido</th><th>Ativo</th></tr></thead>
+        <tbody>{item.adSlots.map(slot => <tr key={slot.id}><td>{adSlotLabels[slot.slot_type] || slot.slot_type}</td><td>{slot.placement_key}</td><td>{slot.description}</td><td>{slot.width && slot.height ? `${slot.width}×${slot.height}` : 'Flexível'}</td><td>{slot.suggested_price == null ? 'A negociar' : money(slot.suggested_price)}</td><td>{slot.is_active ? 'Sim' : 'Não'}</td></tr>)}</tbody>
       </table></div>}
+      <form className={styles.form} action={createEstablishmentAdSlotAction.bind(null, id)}>
+        <div className={styles.formGrid}>
+          <select name="slotType" defaultValue="BILLBOARD">{AD_SLOT_TYPES.map(type => <option key={type} value={type}>{adSlotLabels[type] || type}</option>)}</select>
+          <input name="placementKey" placeholder="Chave única — ex.: fachada-principal" required />
+          <input name="width" type="number" min="1" placeholder="Largura opcional" />
+          <input name="height" type="number" min="1" placeholder="Altura opcional" />
+          <input name="suggestedPrice" type="number" min="0" step="0.01" placeholder="Preço sugerido futuro (R$)" />
+        </div>
+        <textarea name="description" placeholder="Ex.: Painel horizontal acima da recepção, visível quando o jogador entra na imobiliária." required />
+        <button className={styles.secondary}>Adicionar slot publicitário</button>
+      </form>
     </section>
 
     <section className={styles.panel}>
