@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
+import LawFirmRecruitmentEditor from '@/components/LawFirmRecruitmentEditor/LawFirmRecruitmentEditor';
 import StatusBadge from '@/components/StatusBadge/StatusBadge';
 import {
   archiveLawFirmAction,
@@ -36,7 +37,8 @@ export default async function LawFirmDetailPage({ params, searchParams }) {
       <StatusBadge status={firm.status}/>
     </div>
 
-    {query?.created && <div className={styles.notice}>Escritório criado em draft. Cargos, membros e NPCs novos foram montados; os retratos transparentes foram validados antes de serem salvos.</div>}
+    {query?.created && <div className={styles.notice}>Escritório criado em draft. Cargos, membros, recrutamento V1 e NPCs novos foram montados; os retratos transparentes foram validados antes de serem salvos.</div>}
+    {query?.recruitmentSaved && <div className={styles.notice}>Política de recrutamento V1 salva e validada contra os cargos e especialidades deste escritório.</div>}
     {query?.published && <div className={styles.notice}>Escritório, cargos e NPCs novos elegíveis foram publicados para o game.</div>}
     {query?.portrait && <div className={styles.notice}>Retrato regenerado e validado como PNG com fundo transparente.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
@@ -49,14 +51,14 @@ export default async function LawFirmDetailPage({ params, searchParams }) {
         <article className={styles.card}><h4>Especialidades</h4><p>{(firm.specialties || []).map((item) => item.name || item.slug).join(' • ') || 'Não definidas'}</p></article>
       </div>
       <details className={styles.advancedDetails}>
-        <summary>Ver cultura, recrutamento e distribuição de casos</summary>
-        <pre className={styles.code}>{JSON.stringify({ culture: firm.culture, recruitment: firm.recruitment, caseDistribution: firm.case_distribution, discipline: firm.discipline, economy: firm.economy }, null, 2)}</pre>
+        <summary>Ver cultura, distribuição de casos, disciplina e economia</summary>
+        <pre className={styles.code}>{JSON.stringify({ culture: firm.culture, caseDistribution: firm.case_distribution, discipline: firm.discipline, economy: firm.economy }, null, 2)}</pre>
       </details>
     </section>
 
     <section className={styles.panel}>
       <h3>Cargos do escritório</h3>
-      <p>Cargos são entidades do escritório. O vínculo do NPC ou do jogador aponta para um role_id desta lista.</p>
+      <p>Cargos são entidades do escritório. Recrutamento define quem pode receber cada cargo; salário, jornada, exclusividade e benefícios permanecem no próprio cargo.</p>
       <div className={styles.tableWrap}><table className={styles.table}>
         <thead><tr><th>Cargo</th><th>Tipo</th><th>Hierarquia</th><th>Contrato</th><th>Status</th></tr></thead>
         <tbody>{firm.roles.map((role) => <tr key={role.id}>
@@ -67,6 +69,18 @@ export default async function LawFirmDetailPage({ params, searchParams }) {
           <td><StatusBadge status={role.status}/></td>
         </tr>)}</tbody>
       </table></div>
+    </section>
+
+    <section className={styles.panel}>
+      <h3>Mercado de trabalho e recrutamento</h3>
+      <p>Este contrato é consumido pelo Offer Engine do jogo. O Admin define o perfil procurado; o jogo decide quando gerar uma proposta concreta e grava o snapshot em career_law_firm_offers.</p>
+      <LawFirmRecruitmentEditor
+        firmId={id}
+        recruitment={firm.recruitment || {}}
+        roles={firm.roles || []}
+        specialties={firm.specialties || []}
+        status={firm.status}
+      />
     </section>
 
     <section className={styles.panel}>
@@ -93,7 +107,7 @@ export default async function LawFirmDetailPage({ params, searchParams }) {
 
     <section className={styles.panel}>
       <h3>Validação e publicação</h3>
-      <p>Para publicar, todos os membros precisam estar ativos e possuir PNG transparente validado. NPCs novos criados por este escritório são publicados junto; NPC reutilizado que ainda estiver em draft precisa ser publicado separadamente.</p>
+      <p>Para publicar, a política de recrutamento precisa estar no schema V1, todos os membros precisam estar ativos e possuir PNG transparente validado. NPCs novos criados por este escritório são publicados junto; NPC reutilizado que ainda estiver em draft precisa ser publicado separadamente.</p>
       <div className={styles.formGrid}>
         <form action={publishLawFirmAction.bind(null, id)}><button className={styles.primary} disabled={firm.status !== 'draft'}>{firm.status === 'draft' ? 'Publicar escritório no game' : 'Escritório já publicado'}</button></form>
         <form action={archiveLawFirmAction.bind(null, id)}><button className={styles.secondary}>Arquivar escritório</button></form>
