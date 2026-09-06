@@ -5,6 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { generateStructured } from '@/lib/ai/provider';
 import { ENTITY_SCHEMAS } from '@/schemas/contracts';
 import {
+  applyCaseProcessContract,
+  buildCaseProcessGenerationPrompt,
+  caseProcessSchema,
+  preserveCaseProcessContract,
+} from '@/schemas/caseProcess';
+import {
   createDraft,
   publishEntity,
   updateDraft,
@@ -14,6 +20,7 @@ import {
   activateFeature,
   saveSetting,
   listPublishedNpcGenerationContext,
+  listCaseProcessGenerationContext,
   validateCaseNpcAssignments,
   getEntityForEditor,
 } from '@/services/contentService';
@@ -28,10 +35,14 @@ const routeByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const detailByType = { case: '/cases', npc: '/npcs', item: '/shop' };
 const fail = (route, message) => redirect(`${route}?error=${encodeURIComponent(message)}`);
 
+function parseEntity(entityType, value) {
+  return entityType === 'case' ? caseProcessSchema.parse(value) : ENTITY_SCHEMAS[entityType].parse(value);
+}
+
 async function attachGeneratedReactiveWorld(caseModel) {
   try {
     const reactiveWorld = await generateCaseReactiveWorld(caseModel);
-    return ENTITY_SCHEMAS.case.parse({
+    return caseProcessSchema.parse({
       ...caseModel,
       metadata: {
         ...(caseModel.metadata || {}),
@@ -44,7 +55,7 @@ async function attachGeneratedReactiveWorld(caseModel) {
       ? metadata.automation
       : {};
     const warnings = Array.isArray(automation.warnings) ? automation.warnings : [];
-    return ENTITY_SCHEMAS.case.parse({
+    return caseProcessSchema.parse({
       ...caseModel,
       metadata: {
         ...metadata,
@@ -74,6 +85,14 @@ function compactRepairCase(current) {
     difficulty: current.difficulty,
     difficultyStars: current.difficultyStars,
     deadlineHours: current.deadlineHours,
+    repercussionLevel: current.repercussionLevel,
+    proceduralStage: current.proceduralStage,
+    courtName: current.courtName,
+    processKey: current.processKey,
+    appealOfCaseId: current.appealOfCaseId,
+    appealType: current.appealType,
+    appealTrigger: current.appealTrigger,
+    appealDeadlineDays: current.appealDeadlineDays,
     client: content.client,
     briefing: content.briefing,
     locations: locations.map((location) => ({
@@ -118,15 +137,28 @@ export async function generateDraftAction(entityType, formData) {
   if (prompt.length < 10) fail(routeByType[entityType], 'Descreva melhor o conteúdo.');
   let id;
   try {
-    const context = entityType === 'case'
-      ? { publishedNpcs: await listPublishedNpcGenerationContext() }
-      : {};
-    const generated = await generateStructured(entityType, prompt, context);
-    let parsed = ENTITY_SCHEMAS[entityType].parse(generated);
+    const context = {};
+
+    if (entityType === 'case') {
+      const [publishedNpcs, processCases] = await Promise.all([
+        listPublishedNpcGenerationContext(),
+        listCaseProcessGenerationContext(),
+      ]);
+      context.publishedNpcs = publishedNpcs;
+      context.processCases = processCases;
+    }
+
+    const generationPrompt = entityType === 'case'
+      ? buildCaseProcessGenerationPrompt(prompt, context.processCases)
+      : prompt;
+    const generated = await generateStructured(entityType, generationPrompt, context);
+    let parsed = entityType === 'case'
+      ? applyCaseProcessContract(generated, prompt, context.processCases)
+      : ENTITY_SCHEMAS[entityType].parse(generated);
 
     if (entityType === 'case') {
       parsed = await automateGeneratedCaseAssets(parsed, { publishedNpcs: context.publishedNpcs });
-      parsed = ENTITY_SCHEMAS.case.parse(parsed);
+      parsed = caseProcessSchema.parse(parsed);
       await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
       parsed = await attachGeneratedReactiveWorld(parsed);
     } else if (entityType === 'npc') {
@@ -149,7 +181,7 @@ export async function updateJsonAction(entityType, formData) {
   try {
     const raw = JSON.parse(String(formData.get('json') || '{}'));
     if (entityType === 'npc') delete raw.id;
-    const parsed = ENTITY_SCHEMAS[entityType].parse(raw);
+    const parsed = parseEntity(entityType, raw);
     if (entityType === 'case') await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
     await updateDraft(entityType, id, parsed);
     revalidatePath(route);
@@ -164,7 +196,7 @@ export async function publishAction(entityType, formData) {
   try {
     const current = await getEntityForEditor(entityType, id);
     const candidate = entityType === 'npc' ? (() => { const copy = { ...current }; delete copy.id; return copy; })() : current;
-    const parsed = ENTITY_SCHEMAS[entityType].parse(candidate);
+    const parsed = parseEntity(entityType, candidate);
     if (entityType === 'case') await validateCaseNpcAssignments(parsed.content, { allowDraft: false });
     await publishEntity(entityType, id);
     revalidatePath(routeByType[entityType]);
@@ -186,6 +218,7 @@ export async function regenerateCaseAction(formData) {
       'RECONSTRUA E REPARE este caso existente do Rota da Justiça para o contrato jogável atual.',
       'Preserve a premissa, os personagens centrais, a área, a dificuldade e a identidade narrativa sempre que possível.',
       'Preserve também vínculos de NPCs persistentes que continuarem coerentes com a nova estrutura.',
+      'Preserve integralmente repercussão, instância, tribunal e vínculo processual. Uma regeneração nunca transforma uma fase em outro processo ou recurso.',
       'Não traduza nomes de propriedades do schema para português.',
       'Reconstrua locais investigáveis, personagens locais, diálogos, pontos pesquisáveis, pistas e estratégias coerentes entre si.',
       'Todos os IDs e referências internas precisam existir e fechar corretamente.',
@@ -197,14 +230,9 @@ export async function regenerateCaseAction(formData) {
       JSON.stringify(repairContext),
     ].join('\n\n');
     const generated = await generateStructured('case', repairPrompt, { publishedNpcs, repairCase: repairContext });
-    let parsed = ENTITY_SCHEMAS.case.parse({
-      ...generated,
-      id: current.id,
-      code: current.code,
-      status: 'draft',
-    });
+    let parsed = preserveCaseProcessContract(generated, current);
     parsed = await automateGeneratedCaseAssets(parsed, { publishedNpcs });
-    parsed = ENTITY_SCHEMAS.case.parse(parsed);
+    parsed = caseProcessSchema.parse(parsed);
     await validateCaseNpcAssignments(parsed.content, { allowDraft: true });
     parsed = await attachGeneratedReactiveWorld(parsed);
     const result = await replaceCaseWithRegeneratedDraft(id, parsed);

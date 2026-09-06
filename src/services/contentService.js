@@ -1,11 +1,33 @@
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 
 const tableByType = { case: 'cases', npc: 'npcs', item: 'catalog_items' };
+const CASE_PROCESS_COLUMNS = [
+  'repercussion_level',
+  'procedural_stage',
+  'court_name',
+  'process_key',
+  'appeal_of_case_id',
+  'appeal_type',
+  'appeal_trigger',
+  'appeal_deadline_days',
+];
 
 function requireClient() {
   const client = getSupabaseAdmin();
   if (!client) throw new Error('Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env.local.');
   return client;
+}
+
+function isMissingCaseProcessColumns(error) {
+  const message = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return CASE_PROCESS_COLUMNS.some((column) => message.includes(column));
+}
+
+function throwCaseProcessStorageError(error) {
+  if (isMissingCaseProcessColumns(error)) {
+    throw new Error('O banco ainda não recebeu o contrato de repercussão, instâncias e recursos. Aplique docs/cases-process-contract.sql no Supabase do Rota e tente novamente.');
+  }
+  throw error;
 }
 
 function caseRow(data) {
@@ -21,6 +43,14 @@ function caseRow(data) {
     xp_reward: data.xpReward,
     reputation_reward: data.reputationReward,
     min_career_tier: data.minCareerTier,
+    repercussion_level: data.repercussionLevel || 'COMUM',
+    procedural_stage: data.proceduralStage || 'PRIMEIRA_INSTANCIA',
+    court_name: data.courtName || null,
+    process_key: data.processKey || data.id,
+    appeal_of_case_id: data.appealOfCaseId || null,
+    appeal_type: data.appealType || null,
+    appeal_trigger: data.appealTrigger || null,
+    appeal_deadline_days: data.appealDeadlineDays ?? null,
     status: 'draft',
     is_active: true,
     content: data.content,
@@ -90,6 +120,25 @@ async function allocateUniqueCaseValue(client, column, desired) {
   throw new Error(`Não foi possível gerar um ${column} único para o caso.`);
 }
 
+async function validateCaseProcessReference(client, data) {
+  if (!data?.appealOfCaseId) return;
+  if (data.appealOfCaseId === data.id) throw new Error('Um recurso não pode apontar para a própria fase.');
+
+  const { data: parent, error } = await client
+    .from('cases')
+    .select('id,process_key')
+    .eq('id', data.appealOfCaseId)
+    .maybeSingle();
+  if (error) throwCaseProcessStorageError(error);
+  if (!parent) throw new Error(`Fase anterior não encontrada: ${data.appealOfCaseId}.`);
+
+  const parentProcessKey = parent.process_key || parent.id;
+  const currentProcessKey = data.processKey || data.id;
+  if (parentProcessKey !== currentProcessKey) {
+    throw new Error(`A continuação ${data.id} deve manter o process_key ${parentProcessKey} da fase anterior ${parent.id}.`);
+  }
+}
+
 export async function listPublishedNpcGenerationContext() {
   const client = requireClient();
   const [{ data, error }, { data: relations, error: relationError }] = await Promise.all([
@@ -120,6 +169,44 @@ export async function listPublishedNpcGenerationContext() {
     professionalProfile: npc.professional_profile || {},
     personality: npc.personality || {},
     hasPortrait: Boolean(npc.metadata?.portraitSrc),
+  }));
+}
+
+export async function listCaseProcessGenerationContext() {
+  const client = requireClient();
+  const selectWithProcess = 'id,code,title,process_key,procedural_stage,repercussion_level,min_career_tier,status,created_at';
+  const { data, error } = await client.from('cases').select(selectWithProcess).order('created_at', { ascending: true });
+
+  if (!error) {
+    return (data || []).map((item) => ({
+      id: item.id,
+      code: item.code,
+      title: item.title,
+      processKey: item.process_key || item.id,
+      proceduralStage: item.procedural_stage || 'PRIMEIRA_INSTANCIA',
+      repercussionLevel: item.repercussion_level || 'COMUM',
+      minCareerTier: item.min_career_tier,
+      status: item.status,
+    }));
+  }
+
+  if (!isMissingCaseProcessColumns(error)) throw error;
+
+  const { data: legacyData, error: legacyError } = await client
+    .from('cases')
+    .select('id,code,title,min_career_tier,status,created_at')
+    .order('created_at', { ascending: true });
+  if (legacyError) throw legacyError;
+
+  return (legacyData || []).map((item) => ({
+    id: item.id,
+    code: item.code,
+    title: item.title,
+    processKey: item.id,
+    proceduralStage: 'PRIMEIRA_INSTANCIA',
+    repercussionLevel: 'COMUM',
+    minCareerTier: item.min_career_tier,
+    status: item.status,
   }));
 }
 
@@ -166,8 +253,10 @@ export async function createDraft(entityType, data) {
       id: await allocateUniqueCaseValue(client, 'id', data.id),
       code: await allocateUniqueCaseValue(client, 'code', data.code),
     };
+    if (!unique.appealOfCaseId && (!unique.processKey || unique.processKey === data.id)) unique.processKey = unique.id;
+    await validateCaseProcessReference(client, unique);
     const { error } = await client.from('cases').insert(caseRow(unique));
-    if (error) throw error;
+    if (error) throwCaseProcessStorageError(error);
     return unique.id;
   }
   if (entityType === 'npc') {
@@ -199,6 +288,14 @@ export async function getEntityForEditor(entityType, id) {
       xpReward: row.xp_reward,
       reputationReward: row.reputation_reward,
       minCareerTier: row.min_career_tier,
+      repercussionLevel: row.repercussion_level || 'COMUM',
+      proceduralStage: row.procedural_stage || 'PRIMEIRA_INSTANCIA',
+      courtName: row.court_name || undefined,
+      processKey: row.process_key || row.id,
+      appealOfCaseId: row.appeal_of_case_id || undefined,
+      appealType: row.appeal_type || undefined,
+      appealTrigger: row.appeal_trigger || undefined,
+      appealDeadlineDays: row.appeal_deadline_days ?? undefined,
       content: { npcAssignments: [], npcNeeds: [], socialJuridicoTools: [], ...row.content },
       metadata: row.metadata,
       status: row.status,
@@ -246,11 +343,17 @@ export async function updateDraft(entityType, id, data) {
   const { data: current, error: readError } = await client.from(table).select('status').eq('id', id).single();
   if (readError) throw readError;
   if (current.status !== 'draft') throw new Error('Somente conteúdo em draft pode ser editado nesta versão do Admin.');
-  if (entityType === 'case') await validateCaseNpcReferences(client, data.content, { allowDraft: true });
-  const payload = entityType === 'case' ? caseRow(data) : entityType === 'npc' ? npcRow(data) : itemRow(data);
+  if (entityType === 'case') {
+    await validateCaseNpcReferences(client, data.content, { allowDraft: true });
+    await validateCaseProcessReference(client, { ...data, id });
+  }
+  const payload = entityType === 'case' ? caseRow({ ...data, id }) : entityType === 'npc' ? npcRow(data) : itemRow(data);
   delete payload.id;
   const { error } = await client.from(table).update(payload).eq('id', id);
-  if (error) throw error;
+  if (error) {
+    if (entityType === 'case') throwCaseProcessStorageError(error);
+    throw error;
+  }
   await client.from('admin_audit_logs').insert({ action: 'update_draft', entity_type: entityType, entity_id: String(id), payload: { source: 'json-editor' } });
 }
 
@@ -290,6 +393,11 @@ export async function publishEntity(entityType, id) {
   assertReady(entityType, current);
 
   if (entityType === 'case') {
+    await validateCaseProcessReference(client, {
+      id: current.id,
+      processKey: current.process_key || current.id,
+      appealOfCaseId: current.appeal_of_case_id || undefined,
+    });
     const rows = await prepareCaseNpcAssignments(client, id, current.content);
     const { error: deleteError } = await client.from('case_npcs').delete().eq('case_id', id);
     if (deleteError) throw deleteError;
