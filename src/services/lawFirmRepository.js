@@ -108,7 +108,7 @@ export async function getLawFirm(id) {
   if (npcIds.length) {
     const { data, error } = await supabase
       .from('npcs')
-      .select('id,slug,name,role_type,profession,specialization,status,is_active,metadata')
+      .select('id,slug,name,role_type,profession,specialization,jurisdiction,status,is_active,professional_profile,personality,base_memories,dialogue_library,decision_rules,relationships,knowledge,metadata')
       .in('id', npcIds);
     if (error) throw error;
     npcs = data || [];
