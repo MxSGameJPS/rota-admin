@@ -1,5 +1,6 @@
 -- Rota da Justiça — contrato de repercussão, instância e continuidade processual
 -- Aplicar no mesmo projeto Supabase usado pelo Rota Admin e pelo game.
+-- Migration idempotente: pode ser executada novamente caso uma tentativa anterior tenha falhado.
 
 begin;
 
@@ -13,17 +14,96 @@ alter table public.cases
   add column if not exists appeal_trigger text,
   add column if not exists appeal_deadline_days integer;
 
+-- Normaliza strings vazias de tentativas anteriores/edições manuais.
+update public.cases
+set
+  court_name = nullif(btrim(court_name), ''),
+  process_key = nullif(btrim(process_key), ''),
+  appeal_of_case_id = nullif(btrim(appeal_of_case_id), ''),
+  appeal_type = nullif(btrim(appeal_type), ''),
+  appeal_trigger = nullif(btrim(appeal_trigger), '');
+
+-- Casos legados recebem os valores neutros do novo contrato.
 update public.cases
 set repercussion_level = 'COMUM'
-where repercussion_level is null or btrim(repercussion_level) = '';
+where repercussion_level is null
+   or btrim(repercussion_level) = ''
+   or repercussion_level not in ('COMUM', 'RELEVANTE', 'GRANDE_REPERCUSSAO', 'NACIONAL');
 
 update public.cases
 set procedural_stage = 'PRIMEIRA_INSTANCIA'
-where procedural_stage is null or btrim(procedural_stage) = '';
+where procedural_stage is null
+   or btrim(procedural_stage) = ''
+   or procedural_stage not in ('PRIMEIRA_INSTANCIA', 'SEGUNDA_INSTANCIA', 'STJ', 'STF');
 
 update public.cases
 set process_key = id
 where process_key is null or btrim(process_key) = '';
+
+-- Um caso sem fase anterior não pode carregar metadados de recurso isolados.
+-- Isso limpa resíduos de versões antigas sem alterar casos que têm vínculo válido.
+update public.cases
+set
+  appeal_type = null,
+  appeal_trigger = null,
+  appeal_deadline_days = null
+where appeal_of_case_id is null
+  and (
+    appeal_type is not null
+    or appeal_trigger is not null
+    or appeal_deadline_days is not null
+  );
+
+-- Self-reference ou referência para um caso inexistente não forma uma cadeia processual válida.
+-- Como essas linhas não possuem uma fase anterior utilizável, voltam a ser casos independentes.
+update public.cases as child
+set
+  process_key = child.id,
+  appeal_of_case_id = null,
+  appeal_type = null,
+  appeal_trigger = null,
+  appeal_deadline_days = null
+where child.appeal_of_case_id is not null
+  and (
+    child.appeal_of_case_id = child.id
+    or not exists (
+      select 1
+      from public.cases as parent
+      where parent.id = child.appeal_of_case_id
+    )
+  );
+
+-- Para vínculos reais já existentes, mantém o mesmo process_key da fase anterior e
+-- completa apenas os campos obrigatórios que estiverem ausentes/inválidos.
+update public.cases as child
+set
+  process_key = parent.process_key,
+  appeal_type = case
+    when child.appeal_type in (
+      'APELACAO',
+      'AGRAVO_INSTRUMENTO',
+      'AGRAVO_INTERNO',
+      'RECURSO_ESPECIAL',
+      'RECURSO_EXTRAORDINARIO',
+      'AGRAVO_RECURSO_ESPECIAL',
+      'AGRAVO_RECURSO_EXTRAORDINARIO',
+      'OUTRO'
+    ) then child.appeal_type
+    else 'OUTRO'
+  end,
+  appeal_trigger = case
+    when child.appeal_trigger in ('PLAYER_LOSS', 'PLAYER_WIN_OPPONENT_APPEALS', 'ANY_RESULT')
+      then child.appeal_trigger
+    else 'PLAYER_LOSS'
+  end,
+  appeal_deadline_days = case
+    when child.appeal_deadline_days is not null and child.appeal_deadline_days > 0
+      then child.appeal_deadline_days
+    else 15
+  end
+from public.cases as parent
+where child.appeal_of_case_id = parent.id
+  and child.id <> parent.id;
 
 alter table public.cases
   alter column repercussion_level set default 'COMUM',
