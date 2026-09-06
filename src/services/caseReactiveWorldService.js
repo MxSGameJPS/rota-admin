@@ -24,6 +24,15 @@ function compactText(value, maxLength = 320) {
   return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
+function safeId(value, fallback = 'case') {
+  return String(value || fallback)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 90) || fallback;
+}
+
 function parseJson(text) {
   const raw = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   if (!raw) throw new Error('EMPTY_RESPONSE');
@@ -55,14 +64,26 @@ function isTransientProviderError(error) {
 
 function isRetryable(error) {
   const message = String(error?.message || '');
-  return message === 'EMPTY_RESPONSE' || message === 'INVALID_JSON' || isTransientProviderError(error);
+  return message === 'EMPTY_RESPONSE'
+    || message === 'INVALID_JSON'
+    || error?.name === 'ZodError'
+    || Array.isArray(error?.issues)
+    || isTransientProviderError(error);
 }
 
 async function wait(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function requestStage({ stage, systemPrompt, prompt, compactHint = '' }) {
+async function requestStage({
+  stage,
+  systemPrompt,
+  prompt,
+  promptForAttempt = null,
+  compactHint = '',
+  validator = null,
+  fallback = null,
+}) {
   const retryInstructions = [
     '',
     'A tentativa anterior falhou ou retornou JSON inválido. Refaça DO ZERO e retorne SOMENTE JSON válido, completo e fechado.',
@@ -74,19 +95,28 @@ async function requestStage({ stage, systemPrompt, prompt, compactHint = '' }) {
   for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
     try {
       const extra = [retryInstructions[attempt], attempt > 0 ? compactHint : ''].filter(Boolean).join('\n');
+      const effectivePrompt = typeof promptForAttempt === 'function' ? promptForAttempt(attempt) : prompt;
       const result = await generateWithDefaultProvider({
-        prompt,
+        prompt: effectivePrompt,
         systemPrompt: [systemPrompt, extra].filter(Boolean).join('\n\n'),
         timeoutMs: TIMEOUT_MS,
       });
-      return parseJson(result.text);
+      const parsed = parseJson(result.text);
+      return typeof validator === 'function' ? validator(parsed) : parsed;
     } catch (error) {
       if (!isRetryable(error)) throw error;
       lastError = error;
-      if (attempt < ATTEMPTS - 1 && isTransientProviderError(error)) {
-        await wait(1200 * (attempt + 1));
+      if (attempt < ATTEMPTS - 1) {
+        const delay = isTransientProviderError(error) ? 1200 * (attempt + 1) : 350 * (attempt + 1);
+        await wait(delay);
       }
     }
+  }
+
+  if (typeof fallback === 'function') {
+    console.warn(`[Rota Admin] ${stage}: IA indisponível após ${ATTEMPTS} tentativas; usando fallback local do caso.`, lastError?.message || 'erro desconhecido');
+    const fallbackValue = fallback(lastError);
+    return typeof validator === 'function' ? validator(fallbackValue) : fallbackValue;
   }
 
   const message = String(lastError?.message || '');
@@ -105,6 +135,8 @@ function compactCaseContext(caseModel) {
     title: caseModel.title,
     area: caseModel.area,
     difficulty: caseModel.difficulty,
+    proceduralStage: caseModel.proceduralStage || 'PRIMEIRA_INSTANCIA',
+    courtName: caseModel.courtName || null,
     deadlineHours: caseModel.deadlineHours,
     client: content.client ? {
       name: content.client.name,
@@ -151,6 +183,189 @@ function compactCaseContext(caseModel) {
   };
 }
 
+function leanCaseContext(caseModel) {
+  const content = caseModel.content || {};
+  const clues = content.availableClues || [];
+  const strategies = content.strategies || [];
+  return {
+    id: caseModel.id,
+    title: caseModel.title,
+    area: caseModel.area,
+    difficulty: caseModel.difficulty,
+    proceduralStage: caseModel.proceduralStage || 'PRIMEIRA_INSTANCIA',
+    deadlineHours: caseModel.deadlineHours,
+    objective: compactText(content.briefing?.mainObjective, 160),
+    facts: (content.briefing?.facts || []).slice(0, 3).map((fact) => compactText(fact, 120)),
+    clues: clues.slice(0, 6).map((clue) => ({
+      id: clue.id,
+      title: compactText(clue.title, 100),
+      relevance: clue.relevance,
+      isAuthentic: clue.isAuthentic,
+      legalSignificance: compactText(clue.legalSignificance, 120),
+    })),
+    strategies: strategies.slice(0, 2).map((strategy) => ({
+      id: strategy.id,
+      title: compactText(strategy.title, 100),
+      isOptimal: strategy.isOptimal,
+      requiredCrucialClueIds: strategy.requiredCrucialClueIds || [],
+    })),
+    actors: (content.locations || []).flatMap((location) =>
+      (location.characters || []).slice(0, 2).map((character) => ({ name: character.name, role: character.role })),
+    ).slice(0, 5),
+  };
+}
+
+function minimalCaseContext(caseModel) {
+  const content = caseModel.content || {};
+  return {
+    id: caseModel.id,
+    title: caseModel.title,
+    area: caseModel.area,
+    difficulty: caseModel.difficulty,
+    proceduralStage: caseModel.proceduralStage || 'PRIMEIRA_INSTANCIA',
+    objective: compactText(content.briefing?.mainObjective, 120),
+    clues: (content.availableClues || []).slice(0, 4).map((clue) => ({
+      id: clue.id,
+      title: compactText(clue.title, 80),
+      relevance: clue.relevance,
+      isAuthentic: clue.isAuthentic,
+    })),
+  };
+}
+
+function cluePriority(clue) {
+  let score = 0;
+  if (clue?.relevance === 'crucial') score += 5;
+  if (clue?.isAuthentic === false) score += 4;
+  if (clue?.relevance === 'contraditoria') score += 3;
+  if (clue?.relevance === 'complementar') score += 1;
+  return score;
+}
+
+function chooseReactiveClue(caseModel) {
+  return [...(caseModel?.content?.availableClues || [])]
+    .sort((left, right) => cluePriority(right) - cluePriority(left))[0] || null;
+}
+
+function buildFallbackEvents(caseModel) {
+  const clue = chooseReactiveClue(caseModel);
+  const strategy = (caseModel?.content?.strategies || []).find((item) => item.isOptimal)
+    || (caseModel?.content?.strategies || [])[0]
+    || null;
+  const subject = clue?.title || strategy?.title || caseModel.title || 'um elemento relevante do processo';
+  const base = safeId(caseModel.id || caseModel.code || 'case');
+
+  return {
+    events: [{
+      id: `${base}-reactive-review`,
+      eyebrow: 'Intercorrência processual',
+      title: `Nova decisão sobre ${compactText(subject, 74)}`,
+      description: `Durante a preparação de ${compactText(caseModel.title, 90)}, surge uma necessidade de decisão relacionada a ${compactText(subject, 110)}. É preciso equilibrar segurança técnica e prazo processual.`,
+      sourceLabel: clue?.title || 'Andamento do caso',
+      relatedClueId: clue?.id || null,
+      trigger: {
+        minActions: Math.max(2, Math.min(6, Number(caseModel.difficultyStars || 2))),
+        deadlineRatio: 0.55,
+      },
+      choices: [
+        {
+          id: `${base}-reactive-review-check`,
+          label: 'Solicitar conferência complementar',
+          description: 'Dedicar parte do prazo à verificação técnica do elemento antes de consolidar a estratégia.',
+          scoreModifier: 2,
+          timePenaltyHours: Math.min(3, Math.max(1, Math.round(Number(caseModel.deadlineHours || 48) * 0.03))),
+          professionalRisk: 1,
+          resolution: 'A conferência acrescenta segurança técnica e reduz o risco de sustentar a estratégia sobre um elemento frágil.',
+        },
+        {
+          id: `${base}-reactive-review-keep`,
+          label: 'Preservar o cronograma atual',
+          description: 'Manter a estratégia já preparada e evitar consumir novas horas do prazo disponível.',
+          scoreModifier: 0,
+          timePenaltyHours: 0,
+          professionalRisk: clue?.isAuthentic === false ? 5 : 3,
+          resolution: 'O cronograma é preservado, mas a equipe assume o risco de descobrir tarde uma inconsistência que poderia ter sido conferida antes.',
+        },
+      ],
+    }],
+  };
+}
+
+function supportsFallbackHearing(caseModel) {
+  const stage = caseModel.proceduralStage || 'PRIMEIRA_INSTANCIA';
+  if (stage !== 'PRIMEIRA_INSTANCIA') return false;
+  const locations = caseModel?.content?.locations || [];
+  const characters = locations.flatMap((location) => location.characters || []);
+  const hasTribunal = locations.some((location) => location.category === 'tribunal');
+  const hasHearingActor = characters.some((character) => /testemunha|autor|reu|réu|vitima|vítima|cliente|perito/i.test(`${character.role || ''} ${character.name || ''}`));
+  return hasTribunal || hasHearingActor;
+}
+
+function buildFallbackHearing(caseModel) {
+  if (!supportsFallbackHearing(caseModel)) return { hearing: null };
+
+  const content = caseModel.content || {};
+  const clues = [...(content.availableClues || [])].sort((left, right) => cluePriority(right) - cluePriority(left));
+  const firstClue = clues[0] || null;
+  const secondClue = clues.find((clue) => clue.id !== firstClue?.id) || firstClue;
+  const firstActor = (content.locations || []).flatMap((location) => location.characters || [])[0] || null;
+  const base = safeId(caseModel.id || caseModel.code || 'case');
+  const firstSubject = firstClue?.title || 'os fatos centrais apresentados pelas partes';
+  const secondSubject = secondClue?.title || content.briefing?.mainObjective || 'o conjunto probatório disponível';
+
+  return {
+    hearing: {
+      enabled: true,
+      title: 'Audiência de instrução',
+      intro: `A audiência exige decisões sobre os fatos e provas de ${compactText(caseModel.title, 100)} sem revelar antecipadamente qual estratégia terá melhor resultado.`,
+      rounds: [
+        {
+          id: `${base}-hearing-facts`,
+          speaker: firstActor?.name || 'Juízo',
+          title: 'Esclarecimento dos fatos',
+          prompt: `A manifestação coloca em discussão ${compactText(firstSubject, 120)}. Como conduzir este ponto preservando coerência com o restante do processo?`,
+          relatedClueId: firstClue?.id || null,
+          choices: [
+            {
+              id: `${base}-hearing-facts-cross`,
+              label: 'Explorar a consistência do relato',
+              explanation: 'Relacionar a manifestação aos elementos já documentados antes de avançar para a tese principal.',
+              impact: 2,
+            },
+            {
+              id: `${base}-hearing-facts-focus`,
+              label: 'Concentrar na narrativa principal',
+              explanation: 'Evitar ampliar o debate e preservar a linha argumentativa que já foi preparada para o caso.',
+              impact: 0,
+            },
+          ],
+        },
+        {
+          id: `${base}-hearing-evidence`,
+          speaker: 'Juízo',
+          title: 'Manifestação sobre a prova',
+          prompt: `O juízo solicita posicionamento sobre ${compactText(secondSubject, 120)} e seu peso na solução do conflito. Qual abordagem adotar neste momento?`,
+          relatedClueId: secondClue?.id || null,
+          choices: [
+            {
+              id: `${base}-hearing-evidence-joint`,
+              label: 'Pedir valoração conjunta das provas',
+              explanation: 'Conectar o elemento discutido ao restante do conjunto probatório e à coerência da estratégia escolhida.',
+              impact: 2,
+            },
+            {
+              id: `${base}-hearing-evidence-thesis`,
+              label: 'Sustentar somente a tese central',
+              explanation: 'Manter a manifestação restrita ao fundamento principal para reduzir a abertura de novos pontos de controvérsia.',
+              impact: 0,
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 function eventsSystemPrompt() {
   return [
     'Você cria conteúdo jogável para o Rota da Justiça.',
@@ -180,6 +395,26 @@ function hearingSystemPrompt() {
   ].join('\n\n');
 }
 
+function buildEventsPrompt(context, adminInstruction = '') {
+  return [
+    'Crie somente as intercorrências específicas deste caso.',
+    adminInstruction,
+    'CASO:',
+    JSON.stringify(context),
+  ].filter(Boolean).join('\n\n');
+}
+
+function buildHearingPrompt(context, events, adminInstruction = '') {
+  return [
+    'Crie somente a audiência deste caso.',
+    adminInstruction,
+    'CASO:',
+    JSON.stringify(context),
+    'INTERCORRÊNCIAS JÁ EXISTENTES (use apenas como contexto narrativo):',
+    JSON.stringify((events || []).map((event) => ({ id: event.id, title: event.title, relatedClueId: event.relatedClueId }))),
+  ].filter(Boolean).join('\n\n');
+}
+
 function validateHearingReferences(hearing, caseModel) {
   if (!hearing) return hearing;
   const clueIds = new Set((caseModel?.content?.availableClues || []).map((clue) => clue.id));
@@ -192,20 +427,21 @@ function validateHearingReferences(hearing, caseModel) {
 }
 
 export async function generateCaseReactiveEvents(caseModel, extraPrompt = '') {
-  const context = compactCaseContext(caseModel);
+  const contexts = [
+    compactCaseContext(caseModel),
+    leanCaseContext(caseModel),
+    minimalCaseContext(caseModel),
+    minimalCaseContext(caseModel),
+  ];
   const adminInstruction = extraPrompt ? `ORIENTAÇÃO EXTRA DO ADMINISTRADOR: ${extraPrompt}` : '';
-  const rawEvents = await requestStage({
+  const eventsStage = await requestStage({
     stage: 'intercorrências do caso',
     systemPrompt: eventsSystemPrompt(),
-    prompt: [
-      'Crie somente as intercorrências específicas deste caso.',
-      adminInstruction,
-      'CASO:',
-      JSON.stringify(context),
-    ].filter(Boolean).join('\n\n'),
+    promptForAttempt: (attempt) => buildEventsPrompt(contexts[Math.min(attempt, contexts.length - 1)], adminInstruction),
     compactHint: 'Use 1 ou 2 intercorrências, 2 escolhas por intercorrência e textos curtos.',
+    validator: (raw) => caseReactiveEventsStageSchema.parse(raw),
+    fallback: () => buildFallbackEvents(caseModel),
   });
-  const eventsStage = caseReactiveEventsStageSchema.parse(rawEvents);
   const validationShell = caseReactiveWorldSchema.parse({
     version: 1,
     events: eventsStage.events,
@@ -217,22 +453,21 @@ export async function generateCaseReactiveEvents(caseModel, extraPrompt = '') {
 }
 
 export async function generateCaseReactiveHearing(caseModel, events = [], extraPrompt = '') {
-  const context = compactCaseContext(caseModel);
+  const contexts = [
+    compactCaseContext(caseModel),
+    leanCaseContext(caseModel),
+    minimalCaseContext(caseModel),
+    minimalCaseContext(caseModel),
+  ];
   const adminInstruction = extraPrompt ? `ORIENTAÇÃO EXTRA DO ADMINISTRADOR: ${extraPrompt}` : '';
-  const rawHearing = await requestStage({
+  const hearingStage = await requestStage({
     stage: 'audiência do caso',
     systemPrompt: hearingSystemPrompt(),
-    prompt: [
-      'Crie somente a audiência deste caso.',
-      adminInstruction,
-      'CASO:',
-      JSON.stringify(context),
-      'INTERCORRÊNCIAS JÁ EXISTENTES (use apenas como contexto narrativo):',
-      JSON.stringify((events || []).map((event) => ({ id: event.id, title: event.title, relatedClueId: event.relatedClueId }))),
-    ].filter(Boolean).join('\n\n'),
+    promptForAttempt: (attempt) => buildHearingPrompt(contexts[Math.min(attempt, contexts.length - 1)], events, adminInstruction),
     compactHint: 'Se houver audiência, use exatamente 2 etapas e 2 escolhas por etapa. Se não for necessária, retorne hearing null.',
+    validator: (raw) => caseReactiveHearingStageSchema.parse(raw),
+    fallback: () => buildFallbackHearing(caseModel),
   });
-  const hearingStage = caseReactiveHearingStageSchema.parse(rawHearing);
   return validateHearingReferences(hearingStage.hearing, caseModel);
 }
 
@@ -307,7 +542,7 @@ export async function saveCaseReactiveWorld(caseId, config) {
       events: config.events.length,
       hearingRounds: config.hearing?.rounds?.length || 0,
       generation: config.generation || null,
-      source: 'ai-generator',
+      source: 'reactive-world-generator',
     },
   });
 
