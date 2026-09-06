@@ -39,6 +39,8 @@ export async function generateLawFirmContract(prompt, existingNpcs = []) {
   const systemPrompt = [
     'Você é o gerador oficial do módulo Escritórios do Rota da Justiça.',
     LAW_FIRM_AI_INSTRUCTIONS,
+    'RECRUITMENT V1: se continuity.enabled=true, postOabOffer também deve estar habilitado e possuir roleCode válido. A proposta CONTINUITY usa exatamente postOabOffer.roleCode como cargo oferecido.',
+    'RECRUITMENT V1: headhunting, applications e postTermination, quando habilitados, precisam possuir pelo menos um eligibleRoleCode pertencente ao próprio escritório.',
     catalog.length
       ? `NPCs persistentes já existentes. Reutilize apenas quando o briefing realmente apontar para um deles; nesse caso use npc:null:\n${JSON.stringify(catalog)}`
       : 'Não há catálogo de NPCs fornecido. Todo personagem nominal solicitado deve ser criado em members[].npc.',
@@ -53,6 +55,7 @@ export async function generateLawFirmContract(prompt, existingNpcs = []) {
         '',
         'A tentativa anterior não produziu JSON válido para o contrato.',
         'Gere novamente do zero, com textos mais curtos, mantendo todos os campos obrigatórios.',
+        'Se continuity estiver ativo, use o cargo de postOabOffer; se uma política com eligibleRoleCodes estiver ativa, inclua ao menos um cargo válido do próprio escritório.',
         'Retorne somente um objeto JSON completo e fechado.',
       ].join('\n');
       const result = await generateWithDefaultProvider({
