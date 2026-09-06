@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { npcSchema } from '@/schemas/contracts';
+import {
+  LAW_FIRM_REQUIRED_SPECIALTIES_MATCH,
+  lawFirmRecruitmentSchema,
+  normalizeLawFirmRecruitmentV1,
+  validateLawFirmRecruitmentReferences,
+} from '@/schemas/lawFirmRecruitment';
 
 const score = z.number().int().min(0).max(100);
 const slug = z.string().min(2).regex(/^[a-z0-9-]+$/);
@@ -86,7 +92,7 @@ export const lawFirmSchema = z.object({
     weight: score.default(50),
   }).passthrough()).default([]),
   departments: z.array(departmentSchema).min(1),
-  recruitment: z.record(z.string(), z.unknown()).default({}),
+  recruitment: lawFirmRecruitmentSchema,
   roles: z.array(roleSchema).min(1),
   members: z.array(memberSchema).min(1),
   caseDistribution: z.record(z.string(), z.unknown()).default({}),
@@ -97,6 +103,7 @@ export const lawFirmSchema = z.object({
   const roleCodes = new Set();
   const departmentSlugs = new Set();
   const memberSlugs = new Set();
+  const specialtySlugs = new Set(firm.specialties.map((item) => item.slug));
 
   for (const [index, role] of firm.roles.entries()) {
     if (roleCodes.has(role.code)) ctx.addIssue({ code: 'custom', path: ['roles', index, 'code'], message: `Cargo duplicado: ${role.code}.` });
@@ -129,6 +136,15 @@ export const lawFirmSchema = z.object({
       ctx.addIssue({ code: 'custom', path: ['caseDistribution', key], message: `${key} precisa apontar para um membro deste escritório.` });
     }
   }
+
+  try {
+    validateLawFirmRecruitmentReferences(firm.recruitment, {
+      roleCodes: [...roleCodes],
+      specialtySlugs: [...specialtySlugs],
+    });
+  } catch (error) {
+    ctx.addIssue({ code: 'custom', path: ['recruitment'], message: error.message });
+  }
 });
 
 export function normalizeLawFirmGeneratedInput(value) {
@@ -137,6 +153,7 @@ export function normalizeLawFirmGeneratedInput(value) {
   raw.entityType = 'LAW_FIRM';
   raw.status = 'draft';
   raw.isActive = raw.isActive !== false;
+  raw.recruitment = normalizeLawFirmRecruitmentV1(raw.recruitment);
 
   if (Array.isArray(raw.members)) {
     raw.members = raw.members.map((member) => {
@@ -186,4 +203,17 @@ REGRAS DE ESTRUTURA:
 - Crie cargos suficientes para o funcionamento do escritório e para progressão do jogador quando fizer sentido, mas não crie dezenas de cargos desnecessários.
 - Preserve coerência entre porte, reputação, salários, cultura, benefícios, recrutamento e acesso a casos.
 - Não use marcas reais nem pessoas reais identificáveis, salvo se o administrador fornecer explicitamente conteúdo autorizado para isso.
+
+RECRUTAMENTO V1 — CONTRATO CONGELADO:
+- recruitment.recruitmentSchemaVersion deve ser 1.
+- Use somente internshipRecruitment, postOabOffer, continuity, headhunting, applications e postTermination.
+- NÃO use initialGameOffer, acceptsApplications, postTerminationApplication ou nomes alternativos legados.
+- recruitment define QUEM o escritório procura. Salário, horas, exclusividade e benefícios ficam em roles[].contract/benefits.
+- internshipRecruitment.roleCode e postOabOffer.roleCode precisam existir em roles[].
+- eligibleRoleCodes precisam existir em roles[].
+- requiredSpecialties contém somente slugs existentes em specialties[]. A semântica V1 é ${LAW_FIRM_REQUIRED_SPECIALTIES_MATCH}: basta o jogador possuir qualquer uma das especialidades exigidas.
+- evaluationChance só é aplicada pelo game DEPOIS de todos os requisitos mínimos terem sido atendidos.
+- continuity só considera histórico do jogador neste mesmo law_firm_id.
+- Na continuidade: abaixo de minimumPerformance não há proposta; em/ acima de guaranteedPerformance a proposta é garantida; entre os dois valores o game usa interpolação linear.
+- cooldownGameDays é respeitado pelo game e propostas PENDING equivalentes não podem ser duplicadas.
 `;
