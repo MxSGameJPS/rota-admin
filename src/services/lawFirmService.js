@@ -1,5 +1,6 @@
 import { npcSchema } from '@/schemas/contracts';
 import { lawFirmSchema } from '@/schemas/lawFirm';
+import { publishEntity } from '@/services/contentService';
 import { generateLawFirmContract } from '@/services/ai/lawFirmGenerationService';
 import {
   buildLawFirmNpcPortraitPrompt,
@@ -292,7 +293,8 @@ export async function publishLawFirm(id) {
     if (value && !memberSlugs.has(value)) throw new Error(`${key} aponta para NPC que não é membro deste escritório.`);
   }
 
-  await publishLawFirmGraph(id, npcIdsToPublish);
+  for (const npcId of npcIdsToPublish) await publishEntity('npc', npcId);
+  await publishLawFirmGraph(id, []);
   await writeLawFirmAudit('publish_law_firm', id, { npcIdsPublished: npcIdsToPublish });
 }
 
