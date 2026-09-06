@@ -97,6 +97,8 @@ Uma rolagem aleatória nunca pode furar reputação, XP, casos, ética ou especi
 
 `continuity` só pode usar histórico de estágio vinculado ao **mesmo `law_firm_id`**.
 
+No V1, `CONTINUITY` **não possui cargo próprio**: ela oferece exatamente o cargo configurado em `postOabOffer.roleCode`. Portanto `continuity.enabled=true` exige `postOabOffer.enabled=true` e um `postOabOffer.roleCode` válido.
+
 O Offer Engine recebe um `performance` final de 0 a 100 para o estágio naquele escritório. `internshipPerformanceWeight` pertence ao avaliador que compõe essa métrica de desempenho; a curva de oferta usa o `performance` final.
 
 Regras:
@@ -130,10 +132,10 @@ O resultado é limitado ao intervalo 0..1.
 
 ## offer_type oficiais V1
 
-O game só deve criar estes valores:
+O game só deve criar estes valores para o **mercado profissional coberto pelo Offer Engine V1**:
 
 - `POST_OAB` — oferta profissional após aprovação na OAB.
-- `CONTINUITY` — permanência no mesmo escritório onde o jogador estagiou.
+- `CONTINUITY` — permanência no mesmo escritório onde o jogador estagiou; usa `postOabOffer.roleCode`.
 - `HEADHUNTING` — recrutamento espontâneo durante a carreira.
 - `APPLICATION_APPROVED` — candidatura enviada pelo jogador e aprovada.
 - `POST_TERMINATION` — oferta espontânea após desligamento de outro emprego.
@@ -141,6 +143,8 @@ O game só deve criar estes valores:
 - `RETURN` — convite de retorno de antigo escritório.
 
 `INITIAL` e `RECRUITMENT` são legados e não fazem parte do contrato V1.
+
+`internshipRecruitment` é a política de entrada **pré-OAB**. No V1 ela continua servindo ao fluxo inicial de estágio e não introduz um novo `offer_type` em `career_law_firm_offers`. Se o estágio for unificado futuramente ao mesmo Offer Engine, isso deve ser uma evolução explícita do contrato, e não uma reutilização silenciosa de `POST_OAB`.
 
 A constraint do Supabase atual precisa ser atualizada com `docs/law-firm-recruitment-v1.sql` antes do Offer Engine começar a gravar os novos tipos.
 
@@ -171,6 +175,7 @@ Alterações futuras no cargo não reescrevem propostas antigas.
 
 - `recruitmentSchemaVersion` deve ser `1`.
 - `roleCode` e `eligibleRoleCodes` são validados contra os cargos do mesmo escritório.
+- `headhunting`, `applications` e `postTermination`, quando ativos, exigem ao menos um `eligibleRoleCode`.
 - `requiredSpecialties` é validado contra as especialidades do mesmo escritório.
 - Escritório novo gerado pela IA já nasce no V1.
 - Escritórios legados podem ser convertidos pelo editor visual e só são alterados quando o administrador salva.
