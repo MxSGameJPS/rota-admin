@@ -225,14 +225,32 @@ export function validateLawFirmRecruitmentReferences(recruitment, { roleCodes = 
   const validRoles = new Set(roleCodes);
   const validSpecialties = new Set(specialtySlugs);
 
+  if (parsed.headhunting.enabled && parsed.headhunting.eligibleRoleCodes.length === 0) {
+    throw new Error('headhunting habilitado exige pelo menos um eligibleRoleCode.');
+  }
+  if (parsed.applications.enabled && parsed.applications.eligibleRoleCodes.length === 0) {
+    throw new Error('applications habilitado exige pelo menos um eligibleRoleCode.');
+  }
+  if (parsed.postTermination.enabled && parsed.postTermination.eligibleRoleCodes.length === 0) {
+    throw new Error('postTermination habilitado exige pelo menos um eligibleRoleCode.');
+  }
+
   const assertRole = (code, path) => {
     if (code && !validRoles.has(code)) throw new Error(`${path} aponta para cargo inexistente no escritório: ${code}.`);
   };
   const assertRoles = (codes, path) => {
-    for (const code of codes || []) assertRole(code, path);
+    const seen = new Set();
+    for (const code of codes || []) {
+      if (seen.has(code)) throw new Error(`${path} contém cargo duplicado: ${code}.`);
+      seen.add(code);
+      assertRole(code, path);
+    }
   };
   const assertSpecialties = (slugs, path) => {
+    const seen = new Set();
     for (const specialty of slugs || []) {
+      if (seen.has(specialty)) throw new Error(`${path} contém especialidade duplicada: ${specialty}.`);
+      seen.add(specialty);
       if (!validSpecialties.has(specialty)) throw new Error(`${path} aponta para especialidade inexistente no escritório: ${specialty}.`);
     }
   };
