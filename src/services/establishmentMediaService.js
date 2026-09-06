@@ -54,23 +54,60 @@ async function ensureBucket() {
   return client;
 }
 
-function mediaPrompt(establishment, mediaType) {
+async function generateAndStore({ establishment, prompt, folder, assetName }) {
+  const generated = await generateImageWithDefaultProvider({ prompt, n: 1 });
+  const source = await fetchSource(generated.source);
+  const storage = await ensureBucket();
+  const extension = source.mimeType === 'image/jpeg' ? 'jpg' : source.mimeType === 'image/webp' ? 'webp' : 'png';
+  const path = `${slugify(establishment.slug)}/${slugify(folder)}/${slugify(assetName)}-${Date.now()}-${randomUUID().slice(0, 8)}.${extension}`;
+  const { error: uploadError } = await storage.storage.from(BUCKET).upload(path, source.bytes, { contentType: source.mimeType, cacheControl: '31536000', upsert: false });
+  if (uploadError) throw uploadError;
+  const { data: publicData } = storage.storage.from(BUCKET).getPublicUrl(path);
+  const url = publicData?.publicUrl || publicData?.publicURL;
+  if (!url) throw new Error('O Storage não retornou URL pública da mídia.');
+  return { url, path, generated };
+}
+
+function basePrompt(establishment) {
   const city = establishment.city || {};
-  const base = [
+  return [
     'Crie uma imagem ORIGINAL para um estabelecimento FICTÍCIO do jogo brasileiro Rota da Justiça.',
     'Não use marcas reais, logotipos existentes, pessoas famosas, endereços reais exatos ou marcas d’água.',
     `Estabelecimento: ${establishment.name}. Tipo: ${establishment.business_type}.`,
     `Cidade/contexto: ${city.name || ''} - ${city.state_code || ''}, Brasil.`,
     `Descrição: ${establishment.description || ''}`,
     `Estilo visual: ${establishment.visual_style || 'profissional brasileiro contemporâneo'}.`,
-    `Slogan apenas como referência conceitual, não precisa aparecer escrito: ${establishment.slogan || ''}.`,
   ];
+}
+
+function mediaPrompt(establishment, mediaType) {
+  const base = [...basePrompt(establishment), `Slogan apenas como referência conceitual, não precisa aparecer escrito: ${establishment.slogan || ''}.`];
   if (mediaType === 'BANNER_HORIZONTAL') base.push('Formato: banner publicitário horizontal 16:9, composição limpa, espaço visual para futura aplicação de texto pelo jogo, sem texto rasterizado obrigatório.');
   else if (mediaType === 'FACADE') base.push('Formato: fachada externa plausível do estabelecimento, vista frontal/3-4, ambiente urbano brasileiro, sem placas de marcas reais.');
   else if (mediaType === 'INTERIOR') base.push('Formato: fotografia/ilustração arquitetônica do interior principal do estabelecimento, coerente com o serviço prestado, sem pessoas identificáveis.');
   else if (mediaType === 'LOGO') base.push('Formato: símbolo/logotipo ORIGINAL, simples e legível, fundo limpo, sem copiar marcas existentes.');
   else base.push('Formato: imagem promocional institucional coerente com o estabelecimento.');
   return base.join('\n');
+}
+
+function offerPrompt(establishment, offer) {
+  return [
+    ...basePrompt(establishment),
+    `Oferta específica: ${offer.title}. Tipo: ${offer.offer_type}.`,
+    `Descrição da oferta: ${offer.description}.`,
+    offer.price != null ? `Preço de referência no jogo: R$ ${offer.price}.` : '',
+    'Crie uma imagem do BEM OU ESPAÇO oferecido, e não apenas da marca.',
+    establishment.business_type === 'IMOBILIARIA' ? 'Se for imóvel/sala/escritório, mostre o ambiente comercial ou residencial anunciado de forma plausível, como foto de anúncio imobiliário de alta qualidade.' : '',
+    ['LOCADORA', 'CONCESSIONARIA', 'LOJA_VEICULOS'].includes(establishment.business_type) ? 'Se for veículo, mostre o veículo fictício sem logotipo/marca automotiva real identificável.' : '',
+    ['HOTEL', 'POUSADA'].includes(establishment.business_type) ? 'Se for hospedagem, mostre o quarto, suíte, sala ou ambiente oferecido.' : '',
+    'Sem pessoas identificáveis, sem texto, sem marca d’água e sem logotipos reais.',
+  ].filter(Boolean).join('\n');
+}
+
+function ensureFictionalForAiMedia(establishment) {
+  if (!establishment.is_fictional) {
+    throw new Error('Mídia por IA está bloqueada para estabelecimento marcado como real. Use assets oficiais autorizados do patrocinador.');
+  }
 }
 
 export async function hasEstablishmentImageGenerationConfigured() {
@@ -84,45 +121,69 @@ export async function hasEstablishmentImageGenerationConfigured() {
 
 export async function generateEstablishmentMedia(establishmentId, mediaType) {
   const client = requireClient();
-  const { data: establishment, error } = await client
-    .from('establishments')
-    .select('*,city:cities(*)')
-    .eq('id', establishmentId)
-    .single();
+  const { data: establishment, error } = await client.from('establishments').select('*,city:cities(*)').eq('id', establishmentId).single();
   if (error) throw error;
+  ensureFictionalForAiMedia(establishment);
 
-  const generated = await generateImageWithDefaultProvider({ prompt: mediaPrompt(establishment, mediaType), n: 1 });
-  const source = await fetchSource(generated.source);
-  const storage = await ensureBucket();
-  const extension = source.mimeType === 'image/jpeg' ? 'jpg' : source.mimeType === 'image/webp' ? 'webp' : 'png';
-  const path = `${slugify(establishment.slug)}/${slugify(mediaType)}-${Date.now()}-${randomUUID().slice(0, 8)}.${extension}`;
-  const { error: uploadError } = await storage.storage.from(BUCKET).upload(path, source.bytes, { contentType: source.mimeType, cacheControl: '31536000', upsert: false });
-  if (uploadError) throw uploadError;
-  const { data: publicData } = storage.storage.from(BUCKET).getPublicUrl(path);
-  const url = publicData?.publicUrl || publicData?.publicURL;
-  if (!url) throw new Error('O Storage não retornou URL pública da mídia.');
+  const stored = await generateAndStore({
+    establishment,
+    prompt: mediaPrompt(establishment, mediaType),
+    folder: 'brand',
+    assetName: mediaType,
+  });
 
   const { data: row, error: insertError } = await client.from('establishment_media').insert({
     establishment_id: establishmentId,
     media_type: mediaType,
     source_type: 'AI',
-    url,
-    storage_path: path,
+    url: stored.url,
+    storage_path: stored.path,
     alt_text: `${mediaType} de ${establishment.name}`,
     is_primary: mediaType === 'BANNER_HORIZONTAL' || mediaType === 'FACADE',
     metadata: {
-      model: generated.model || '',
-      revisedPrompt: generated.revisedPrompt || '',
-      generationMs: generated.elapsedMs || null,
+      model: stored.generated.model || '',
+      revisedPrompt: stored.generated.revisedPrompt || '',
+      generationMs: stored.generated.elapsedMs || null,
       generatedAt: new Date().toISOString(),
     },
   }).select('*').single();
   if (insertError) throw insertError;
 
   const patch = {};
-  if (mediaType === 'LOGO') patch.logo_url = url;
-  if (mediaType === 'BANNER_HORIZONTAL') patch.banner_url = url;
-  if (mediaType === 'FACADE') patch.cover_image_url = url;
+  if (mediaType === 'LOGO') patch.logo_url = stored.url;
+  if (mediaType === 'BANNER_HORIZONTAL') patch.banner_url = stored.url;
+  if (mediaType === 'FACADE') patch.cover_image_url = stored.url;
   if (Object.keys(patch).length) await client.from('establishments').update(patch).eq('id', establishmentId);
   return row;
+}
+
+export async function generateEstablishmentOfferImage(establishmentId, offerId) {
+  const client = requireClient();
+  const [{ data: establishment, error: establishmentError }, { data: offer, error: offerError }] = await Promise.all([
+    client.from('establishments').select('*,city:cities(*)').eq('id', establishmentId).single(),
+    client.from('establishment_offers').select('*').eq('id', offerId).eq('establishment_id', establishmentId).single(),
+  ]);
+  if (establishmentError) throw establishmentError;
+  if (offerError) throw offerError;
+  ensureFictionalForAiMedia(establishment);
+
+  const stored = await generateAndStore({
+    establishment,
+    prompt: offerPrompt(establishment, offer),
+    folder: 'offers',
+    assetName: `${offer.title}-${offer.id}`,
+  });
+
+  const { error: updateError } = await client.from('establishment_offers').update({
+    image_url: stored.url,
+    metadata: {
+      ...(offer.metadata || {}),
+      imageGeneratedByAi: true,
+      imageStoragePath: stored.path,
+      imageModel: stored.generated.model || '',
+      imageGeneratedAt: new Date().toISOString(),
+    },
+  }).eq('id', offer.id);
+  if (updateError) throw updateError;
+  return { url: stored.url, path: stored.path };
 }
