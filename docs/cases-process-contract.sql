@@ -14,6 +14,22 @@ alter table public.cases
   add column if not exists appeal_trigger text,
   add column if not exists appeal_deadline_days integer;
 
+-- Os campos abaixo são opcionais no contrato novo. Alguns bancos legados já possuíam
+-- essas colunas com NOT NULL/defaults; removemos essas restrições antes do backfill.
+alter table public.cases
+  alter column court_name drop not null,
+  alter column appeal_of_case_id drop not null,
+  alter column appeal_type drop not null,
+  alter column appeal_trigger drop not null,
+  alter column appeal_deadline_days drop not null;
+
+alter table public.cases
+  alter column court_name drop default,
+  alter column appeal_of_case_id drop default,
+  alter column appeal_type drop default,
+  alter column appeal_trigger drop default,
+  alter column appeal_deadline_days drop default;
+
 -- Normaliza strings vazias de tentativas anteriores/edições manuais.
 update public.cases
 set
