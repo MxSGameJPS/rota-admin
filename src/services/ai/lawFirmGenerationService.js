@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { generateWithDefaultProvider } from '@/services/ai/providerService';
 import {
   LAW_FIRM_AI_INSTRUCTIONS,
@@ -33,7 +34,7 @@ function compactNpcCatalog(npcs) {
 }
 
 export async function generateLawFirmContract(prompt, existingNpcs = []) {
-  const jsonSchema = zodSchemaJson();
+  const jsonSchema = z.toJSONSchema(lawFirmSchema);
   const catalog = compactNpcCatalog(existingNpcs);
   const systemPrompt = [
     'Você é o gerador oficial do módulo Escritórios do Rota da Justiça.',
@@ -70,12 +71,4 @@ export async function generateLawFirmContract(prompt, existingNpcs = []) {
   }
 
   throw new Error(`A IA não conseguiu gerar um escritório válido: ${lastError?.message || 'falha desconhecida'}`);
-}
-
-function zodSchemaJson() {
-  // Zod 4 expõe toJSONSchema no próprio módulo/objeto em runtime.
-  // Mantemos o require dinâmico fora do bundle do cliente porque este serviço é server-only.
-  // eslint-disable-next-line global-require
-  const { z } = require('zod');
-  return z.toJSONSchema(lawFirmSchema);
 }
