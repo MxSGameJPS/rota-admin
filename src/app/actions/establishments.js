@@ -11,7 +11,11 @@ import {
   publishEstablishment,
   updateEstablishment,
 } from '@/services/establishmentService';
-import { generateEstablishmentMedia } from '@/services/establishmentMediaService';
+import {
+  generateEstablishmentMedia,
+  generateEstablishmentOfferImage,
+} from '@/services/establishmentMediaService';
+import { createEstablishmentAdSlot } from '@/services/establishmentAdService';
 
 function checked(formData, key) {
   return formData.get(key) === 'on' || formData.get(key) === 'true';
@@ -162,6 +166,37 @@ export async function generateEstablishmentMediaAction(id, mediaType) {
     await generateEstablishmentMedia(id, mediaType);
     revalidatePath(route);
     redirect(`${route}?mediaGenerated=${encodeURIComponent(mediaType)}`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error);
+  }
+}
+
+export async function generateEstablishmentOfferImageAction(id, offerId) {
+  const route = `/establishments/${id}`;
+  try {
+    await generateEstablishmentOfferImage(id, offerId);
+    revalidatePath(route);
+    redirect(`${route}?offerImageGenerated=1`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error);
+  }
+}
+
+export async function createEstablishmentAdSlotAction(id, formData) {
+  const route = `/establishments/${id}`;
+  try {
+    await createEstablishmentAdSlot(id, {
+      slotType: formData.get('slotType'),
+      placementKey: formData.get('placementKey'),
+      description: formData.get('description'),
+      width: formData.get('width'),
+      height: formData.get('height'),
+      suggestedPrice: formData.get('suggestedPrice'),
+    });
+    revalidatePath(route);
+    redirect(`${route}?adSlotCreated=1`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error);
