@@ -138,6 +138,13 @@ export const lawFirmRecruitmentSchema = z.object({
   if (value.postOabOffer.enabled && !value.postOabOffer.roleCode) {
     ctx.addIssue({ code: 'custom', path: ['postOabOffer', 'roleCode'], message: 'Oferta pós-OAB habilitada exige roleCode.' });
   }
+  if (value.continuity.enabled && (!value.postOabOffer.enabled || !value.postOabOffer.roleCode)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['continuity', 'enabled'],
+      message: 'Continuidade habilitada exige postOabOffer habilitado com roleCode; CONTINUITY oferece esse mesmo cargo.',
+    });
+  }
 });
 
 export function defaultLawFirmRecruitment() {
