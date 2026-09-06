@@ -13,9 +13,23 @@ async function list(table, select = '*', order = 'created_at') {
 
 export async function getDashboardStats() {
   const client = getSupabaseAdmin();
-  if (!client) return { connected: false, cases: 0, npcs: 0, items: 0, rewards: 0, warnings: ['Configure o .env.local para conectar ao Supabase.'] };
-  const [cases, npcs, items, rewards] = await Promise.all([safeCount(client, 'cases'), safeCount(client, 'npcs'), safeCount(client, 'catalog_items'), safeCount(client, 'reward_definitions')]);
-  return { connected: true, cases: cases.count, npcs: npcs.count, items: items.count, rewards: rewards.count, warnings: [npcs.error, items.error, rewards.error].filter(Boolean) };
+  if (!client) return { connected: false, cases: 0, npcs: 0, establishments: 0, items: 0, rewards: 0, warnings: ['Configure o .env.local para conectar ao Supabase.'] };
+  const [cases, npcs, establishments, items, rewards] = await Promise.all([
+    safeCount(client, 'cases'),
+    safeCount(client, 'npcs'),
+    safeCount(client, 'establishments'),
+    safeCount(client, 'catalog_items'),
+    safeCount(client, 'reward_definitions'),
+  ]);
+  return {
+    connected: true,
+    cases: cases.count,
+    npcs: npcs.count,
+    establishments: establishments.count,
+    items: items.count,
+    rewards: rewards.count,
+    warnings: [cases.error, npcs.error, establishments.error, items.error, rewards.error].filter(Boolean),
+  };
 }
 
 export async function listCases() {
