@@ -1,0 +1,37 @@
+.wrapper { display: grid; gap: 16px; }
+.contractBar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.contractBar > div { background: var(--panel-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: grid; gap: 5px; }
+.contractBar strong { font-size: 12px; }
+.contractBar span { color: var(--muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.warning { border: 1px solid rgba(200,164,94,.45); background: rgba(200,164,94,.08); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 12px; line-height: 1.55; }
+.form fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+.policy { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-soft); display: grid; gap: 14px; }
+.policyHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.policyHeader h4 { margin: 0 0 5px; font: 700 16px Georgia,serif; }
+.policyHeader p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.toggle { display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; font-size: 11px; font-weight: 700; }
+.toggle input { accent-color: currentColor; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > span,.subsection > strong { font-size: 11px; font-weight: 800; letter-spacing: .03em; }
+.field input,.field select { width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); padding: 8px 10px; }
+.numberWrap { display: flex; align-items: center; gap: 8px; }
+.numberWrap small { color: var(--muted); white-space: nowrap; }
+.thresholdGrid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.choiceGrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 8px; margin-top: 8px; }
+.choice { border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; display: flex; gap: 9px; align-items: flex-start; cursor: pointer; }
+.choice input { margin-top: 2px; }
+.choice span { display: grid; gap: 2px; }
+.choice strong { font-size: 11px; }
+.choice small { color: var(--muted); font: 10px monospace; }
+.subsection { display: grid; gap: 3px; }
+.subsection > small,.muted { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.rule { margin: 0; border-left: 3px solid var(--gold); padding: 8px 10px; background: rgba(200,164,94,.06); color: var(--muted); font-size: 11px; line-height: 1.55; }
+.rule code,.footer code { color: var(--text); }
+.footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-soft); }
+.footer > div { display: grid; gap: 4px; }
+.footer strong { font-size: 12px; }
+.footer span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.footer button { border: 0; border-radius: 9px; padding: 11px 16px; font-weight: 800; cursor: pointer; background: var(--gold); color: #111; white-space: nowrap; }
+.footer button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 1000px) { .contractBar { grid-template-columns: 1fr; } .thresholdGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 640px) { .policyHeader,.footer { flex-direction: column; align-items: stretch; } .thresholdGrid { grid-template-columns: 1fr; } .choiceGrid { grid-template-columns: 1fr; } .footer button { width: 100%; } }
