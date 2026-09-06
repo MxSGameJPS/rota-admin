@@ -1,5 +1,11 @@
 import { npcSchema } from '@/schemas/contracts';
 import { lawFirmSchema } from '@/schemas/lawFirm';
+import {
+  LAW_FIRM_RECRUITMENT_SCHEMA_VERSION,
+  lawFirmRecruitmentSchema,
+  normalizeLawFirmRecruitmentV1,
+  validateLawFirmRecruitmentReferences,
+} from '@/schemas/lawFirmRecruitment';
 import { publishEntity } from '@/services/contentService';
 import { generateLawFirmContract } from '@/services/ai/lawFirmGenerationService';
 import {
@@ -20,6 +26,7 @@ import {
   listLawFirms as listLawFirmRows,
   listNpcCatalogForLawFirmGeneration,
   publishLawFirmGraph,
+  updateLawFirmRecruitment,
   updateNpcMetadata,
   writeLawFirmAudit,
 } from '@/services/lawFirmRepository';
@@ -142,6 +149,13 @@ function rowToPortraitNpc(npcRowValue) {
   };
 }
 
+function recruitmentReferenceContext(firm) {
+  return {
+    roleCodes: (firm.roles || []).map((role) => role.code),
+    specialtySlugs: (firm.specialties || []).map((specialty) => specialty.slug).filter(Boolean),
+  };
+}
+
 export async function listLawFirms() {
   return listLawFirmRows();
 }
@@ -224,6 +238,7 @@ export async function createGeneratedLawFirm(prompt) {
       createdNpcIds,
       memberCount: memberRows.length,
       roleCount: createdRoles.length,
+      recruitmentSchemaVersion: contract.recruitment.recruitmentSchemaVersion,
     });
     return getLawFirmRow(firm.id);
   } catch (error) {
@@ -235,6 +250,20 @@ export async function createGeneratedLawFirm(prompt) {
     }
     throw error;
   }
+}
+
+export async function updateLawFirmRecruitmentPolicy(id, input) {
+  const firm = await getLawFirmRow(id);
+  if (firm.status === 'archived' || !firm.is_active) throw new Error('Escritório arquivado/inativo não pode receber alterações de recrutamento.');
+
+  const normalized = normalizeLawFirmRecruitmentV1(input);
+  const parsed = validateLawFirmRecruitmentReferences(normalized, recruitmentReferenceContext(firm));
+  await updateLawFirmRecruitment(id, parsed);
+  await writeLawFirmAudit('update_law_firm_recruitment', id, {
+    recruitmentSchemaVersion: parsed.recruitmentSchemaVersion,
+    source: 'visual-editor',
+  });
+  return parsed;
 }
 
 export async function regenerateLawFirmMemberPortrait(firmId, npcId) {
@@ -263,6 +292,11 @@ export async function publishLawFirm(id) {
   if (firm.status !== 'draft') throw new Error('Somente escritórios em draft podem ser publicados.');
   if (!firm.roles.length) throw new Error('O escritório precisa possuir pelo menos um cargo.');
   if (!firm.members.length) throw new Error('O escritório precisa possuir pelo menos um membro.');
+  if (firm.recruitment?.recruitmentSchemaVersion !== LAW_FIRM_RECRUITMENT_SCHEMA_VERSION) {
+    throw new Error('A política de recrutamento ainda não está no contrato V1. Revise e salve o editor de Mercado de Trabalho antes de publicar.');
+  }
+  const recruitment = lawFirmRecruitmentSchema.parse(firm.recruitment);
+  validateLawFirmRecruitmentReferences(recruitment, recruitmentReferenceContext(firm));
 
   const npcIdsToPublish = [];
   for (const member of firm.members) {
@@ -295,7 +329,10 @@ export async function publishLawFirm(id) {
 
   for (const npcId of npcIdsToPublish) await publishEntity('npc', npcId);
   await publishLawFirmGraph(id, []);
-  await writeLawFirmAudit('publish_law_firm', id, { npcIdsPublished: npcIdsToPublish });
+  await writeLawFirmAudit('publish_law_firm', id, {
+    npcIdsPublished: npcIdsToPublish,
+    recruitmentSchemaVersion: recruitment.recruitmentSchemaVersion,
+  });
 }
 
 export async function archiveLawFirm(id) {
