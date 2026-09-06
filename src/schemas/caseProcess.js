@@ -102,9 +102,9 @@ function higherCareerTier(currentTier, requiredTier) {
 }
 
 function inferRepercussion(text) {
-  if (/\brepercussao nacional\b|\bnacional\b/.test(text)) return 'NACIONAL';
+  if (/\brepercussao nacional\b|\brepercussao de alcance nacional\b|\brepercussion_level\s*[:=]\s*nacional\b/.test(text)) return 'NACIONAL';
   if (/\bgrande repercussao\b|\bgrande_repercussao\b/.test(text)) return 'GRANDE_REPERCUSSAO';
-  if (/\brepercussao relevante\b|\brelevante\b/.test(text)) return 'RELEVANTE';
+  if (/\brepercussao relevante\b|\brepercussion_level\s*[:=]\s*relevante\b/.test(text)) return 'RELEVANTE';
   return 'COMUM';
 }
 
@@ -174,16 +174,22 @@ export function applyCaseProcessContract(model, prompt, caseCatalog = []) {
   const text = normalizeText(prompt);
   const appealType = inferAppealType(text);
   const parent = findMentionedCase(prompt, caseCatalog);
-  const continuation = looksLikeContinuation(text, appealType) && Boolean(parent);
+  const continuationIntent = looksLikeContinuation(text, appealType);
+  const continuation = continuationIntent && Boolean(parent);
   const referencedId = referencedCaseIdCandidate(prompt);
 
-  if (looksLikeContinuation(text, appealType) && referencedId && !parent) {
+  if (appealType && !parent) {
+    const caseHint = referencedId ? ` O ID ${referencedId} não foi encontrado no acervo.` : '';
+    throw new Error(`Para criar ${appealType}, informe no prompt o ID ou código da fase imediatamente anterior.${caseHint}`);
+  }
+
+  if (continuationIntent && referencedId && !parent) {
     throw new Error(`A fase anterior ${referencedId} não foi encontrada no acervo. Crie/publice a fase anterior ou confira o ID antes de gerar o recurso.`);
   }
 
-  const proceduralStage = inferProceduralStage(text, appealType);
+  const proceduralStage = inferProceduralStage(text, continuation ? appealType : undefined);
   const stageFloor = PROCEDURAL_STAGE_MIN_TIER[proceduralStage] || null;
-  const appealTrigger = continuation ? (inferAppealTrigger(text) || 'ANY_RESULT') : undefined;
+  const appealTrigger = continuation ? (inferAppealTrigger(text) || 'PLAYER_LOSS') : undefined;
   const appealDeadlineDays = continuation ? (inferDeadlineDays(text) || 15) : undefined;
 
   return caseProcessSchema.parse({
