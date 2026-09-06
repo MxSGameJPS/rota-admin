@@ -7,12 +7,13 @@ export default async function DashboardPage() {
   return (
     <div className={styles.page}>
       <section className={styles.hero}>
-        <div><span>GAME MASTER</span><h2>Administre o jogo inteiro sem publicar uma nova build.</h2><p>Casos, NPCs, cidades, estabelecimentos, economia, loja, progressão e conteúdo vivo são publicados no Supabase e consumidos pelo Rota da Justiça.</p></div>
+        <div><span>GAME MASTER</span><h2>Administre o jogo inteiro sem publicar uma nova build.</h2><p>Casos, NPCs, escritórios, cidades, estabelecimentos, economia, loja, progressão e conteúdo vivo são publicados no Supabase e consumidos pelo Rota da Justiça.</p></div>
         <div className={stats.connected ? styles.online : styles.offline}>{stats.connected ? 'SUPABASE CONECTADO' : 'SUPABASE NÃO CONFIGURADO'}</div>
       </section>
       <section className={styles.metrics}>
         <MetricCard label="Casos" value={stats.cases} detail="rascunhos + publicados" />
         <MetricCard label="NPCs" value={stats.npcs} detail="universo persistente" />
+        <MetricCard label="Escritórios" value={stats.lawFirms} detail="empregadores persistentes" />
         <MetricCard label="Estabelecimentos" value={stats.establishments} detail="mundo comercial por cidade" />
         <MetricCard label="Itens" value={stats.items} detail="skins, boosts e cosméticos" />
         <MetricCard label="Recompensas" value={stats.rewards} detail="regras administráveis" />
