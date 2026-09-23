@@ -230,6 +230,49 @@ export async function uploadEstablishmentMapBanner(establishmentId, file) {
   return { url, path };
 }
 
+export async function uploadEstablishmentOfferImage(establishmentId, offerId, file) {
+  const client = requireClient();
+  if (!file || typeof file.arrayBuffer !== 'function') throw new Error('Selecione uma imagem do produto.');
+  const mimeType = String(file.type || '').toLowerCase();
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) throw new Error('Formato inválido. Use PNG, JPG ou WebP.');
+  const size = Number(file.size || 0);
+  if (!size || size > MAX_IMAGE_BYTES) throw new Error('A imagem precisa ter até 12 MB.');
+
+  const [{ data: establishment, error: establishmentError }, { data: offer, error: offerError }] = await Promise.all([
+    client.from('establishments').select('id,slug,name').eq('id', establishmentId).single(),
+    client.from('establishment_offers').select('id,title,metadata').eq('id', offerId).eq('establishment_id', establishmentId).single(),
+  ]);
+  if (establishmentError) throw establishmentError;
+  if (offerError) throw offerError;
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const storage = await ensureBucket();
+  const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+  const path = `${slugify(establishment.slug)}/offers/upload-${slugify(offer.title)}-${Date.now()}-${randomUUID().slice(0, 8)}.${extension}`;
+  const { error: uploadError } = await storage.storage.from(BUCKET).upload(path, bytes, {
+    contentType: mimeType,
+    cacheControl: '31536000',
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data: publicData } = storage.storage.from(BUCKET).getPublicUrl(path);
+  const url = publicData?.publicUrl || publicData?.publicURL;
+  if (!url) throw new Error('O Storage não retornou a URL pública da imagem.');
+
+  const { error: updateError } = await client.from('establishment_offers').update({
+    image_url: url,
+    metadata: {
+      ...(offer.metadata || {}),
+      imageSource: 'UPLOAD',
+      imageStoragePath: path,
+      imageUploadedAt: new Date().toISOString(),
+    },
+  }).eq('id', offerId);
+  if (updateError) throw updateError;
+  return { url, path };
+}
+
 export async function generateEstablishmentOfferImage(establishmentId, offerId) {
   const client = requireClient();
   const [{ data: establishment, error: establishmentError }, { data: offer, error: offerError }] = await Promise.all([
