@@ -7,6 +7,7 @@ import {
   GAME_USE_TYPES,
   OFFER_TYPES,
   PERIOD_TYPES,
+  PRESENCE_SCOPES,
   establishmentGeneratedSchema,
   normalizeSlug,
 } from '@/schemas/establishment';
@@ -48,7 +49,8 @@ function parseJson(text) {
 async function generateStructuredEstablishment(city, prompt) {
   const systemPrompt = [
     'Você cria estabelecimentos persistentes para o universo do jogo brasileiro Rota da Justiça.',
-    'O estabelecimento NÃO pertence a um caso específico. Ele existe permanentemente na cidade e pode ser reutilizado em gameplay, economia, viagens, imóveis, veículos e publicidade in-game.',
+    'O estabelecimento NÃO pertence a um caso específico. Ele existe permanentemente no universo e pode ser reutilizado em gameplay, economia, viagens, imóveis, veículos e publicidade in-game.',
+    'presenceScope=CITY limita a exibição à cidade escolhida. presenceScope=UNIVERSAL significa que o estabelecimento deve aparecer em qualquer cidade escolhida pelo jogador, usando a cidade selecionada abaixo apenas como referência editorial.',
     'Neste momento, salvo instrução expressa em contrário, trate marca, endereço, telefone, site e pessoas como FICTÍCIOS. Nunca invente parceria real, CNPJ, endereço exato real ou alegação de patrocínio.',
     'Crie uma marca plausível e local, com identidade visual própria. Os serviços devem ser úteis ao gameplay.',
     'Para imobiliária, priorize locação/venda de imóveis e salas comerciais. Para hotéis/pousadas, hospedagem e salas. Para locadoras/lojas de veículos, locação ou venda de veículos conforme o tipo.',
@@ -177,12 +179,13 @@ async function insertGeneratedChildren(client, establishmentId, generated) {
   }
 }
 
-export async function generateEstablishmentDraft(cityId, prompt) {
+export async function generateEstablishmentDraft(cityId, prompt, presenceScope = 'CITY') {
   const client = requireClient();
   const { data: city, error: cityError } = await client.from('cities').select('*').eq('id', cityId).single();
   if (cityError) worldStorageError(cityError);
   if (String(prompt || '').trim().length < 10) throw new Error('Descreva melhor o estabelecimento que deseja criar.');
 
+  const normalizedPresenceScope = PRESENCE_SCOPES.includes(presenceScope) ? presenceScope : 'CITY';
   const generated = await generateStructuredEstablishment(city, String(prompt).trim());
   const desiredSlug = normalizeSlug(generated.slug || generated.name);
   const slug = `${desiredSlug}-${normalizeSlug(city.name)}`.slice(0, 120);
@@ -194,6 +197,7 @@ export async function generateEstablishmentDraft(cityId, prompt) {
     description: generated.description,
     slogan: generated.slogan || null,
     city_id: city.id,
+    presence_scope: normalizedPresenceScope,
     district: generated.district || null,
     street_name: generated.streetName || null,
     number_reference: generated.numberReference || null,
@@ -217,6 +221,7 @@ export async function generateEstablishmentDraft(cityId, prompt) {
       ...(generated.metadata || {}),
       generatedByAi: true,
       generationPrompt: String(prompt).trim(),
+      presenceScope: normalizedPresenceScope,
       generatedAt: new Date().toISOString(),
     },
   }).select('*').single();
@@ -232,6 +237,7 @@ export async function generateEstablishmentDraft(cityId, prompt) {
 }
 
 export async function createManualEstablishment(input) {
+  const presenceScope = PRESENCE_SCOPES.includes(input.presenceScope) ? input.presenceScope : 'CITY';
   const client = requireClient();
   const name = String(input.name || '').trim();
   if (name.length < 2) throw new Error('Informe o nome do estabelecimento.');
@@ -243,6 +249,7 @@ export async function createManualEstablishment(input) {
     business_type: input.businessType,
     description: String(input.description || `${name} é um estabelecimento disponível no universo do Rota da Justiça.`).trim(),
     city_id: input.cityId,
+    presence_scope: presenceScope,
     district: String(input.district || '').trim() || null,
     visual_style: 'Identidade visual a definir no Rota Admin.',
     brand_colors: [],
@@ -262,6 +269,7 @@ export async function updateEstablishment(id, input) {
   const client = requireClient();
   if (input.businessType && !BUSINESS_TYPES.includes(input.businessType)) throw new Error('Tipo inválido.');
   if (input.gameUseType && !GAME_USE_TYPES.includes(input.gameUseType)) throw new Error('Uso no game inválido.');
+  if (input.presenceScope && !PRESENCE_SCOPES.includes(input.presenceScope)) throw new Error('Escopo de presença inválido.');
   const patch = {
     name: String(input.name || '').trim(),
     slug: normalizeSlug(input.slug || input.name),
@@ -281,6 +289,7 @@ export async function updateEstablishment(id, input) {
     price_range: String(input.priceRange || '').trim() || null,
     visual_style: String(input.visualStyle || '').trim(),
     game_use_type: input.gameUseType,
+    presence_scope: input.presenceScope || 'CITY',
     is_fictional: Boolean(input.isFictional),
     is_sponsored: Boolean(input.isSponsored),
     sponsor_name: String(input.sponsorName || '').trim() || null,
@@ -340,4 +349,4 @@ export async function archiveEstablishment(id) {
   if (error) worldStorageError(error);
 }
 
-export { AD_SLOT_TYPES, BUSINESS_TYPES, GAME_USE_TYPES, OFFER_TYPES, PERIOD_TYPES };
+export { AD_SLOT_TYPES, BUSINESS_TYPES, GAME_USE_TYPES, OFFER_TYPES, PERIOD_TYPES, PRESENCE_SCOPES };
