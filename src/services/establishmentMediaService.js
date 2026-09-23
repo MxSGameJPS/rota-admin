@@ -82,7 +82,7 @@ function basePrompt(establishment) {
 
 function mediaPrompt(establishment, mediaType) {
   const base = [...basePrompt(establishment), `Slogan apenas como referência conceitual, não precisa aparecer escrito: ${establishment.slogan || ''}.`];
-  if (mediaType === 'BANNER_HORIZONTAL') base.push('Formato: banner publicitário horizontal 16:9, composição limpa, espaço visual para futura aplicação de texto pelo jogo, sem texto rasterizado obrigatório.');
+  if (mediaType === 'BANNER_HORIZONTAL') base.push('Formato: banner horizontal aproximadamente 3:1, pensado para aparecer como marcador compacto no mapa do jogo; composição limpa, leitura visual imediata e sem texto rasterizado obrigatório.');
   else if (mediaType === 'FACADE') base.push('Formato: fachada externa plausível do estabelecimento, vista frontal/3-4, ambiente urbano brasileiro, sem placas de marcas reais.');
   else if (mediaType === 'INTERIOR') base.push('Formato: fotografia/ilustração arquitetônica do interior principal do estabelecimento, coerente com o serviço prestado, sem pessoas identificáveis.');
   else if (mediaType === 'LOGO') base.push('Formato: símbolo/logotipo ORIGINAL, simples e legível, fundo limpo, sem copiar marcas existentes.');
@@ -155,6 +155,79 @@ export async function generateEstablishmentMedia(establishmentId, mediaType) {
   if (mediaType === 'FACADE') patch.cover_image_url = stored.url;
   if (Object.keys(patch).length) await client.from('establishments').update(patch).eq('id', establishmentId);
   return row;
+}
+
+export async function uploadEstablishmentMapBanner(establishmentId, file) {
+  const client = requireClient();
+
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    throw new Error('Selecione uma imagem para o banner do mapa.');
+  }
+
+  const mimeType = String(file.type || '').toLowerCase();
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) {
+    throw new Error('Formato inválido. Use PNG, JPG ou WebP.');
+  }
+
+  const size = Number(file.size || 0);
+  if (!size || size > MAX_IMAGE_BYTES) {
+    throw new Error('O banner precisa ter até 12 MB.');
+  }
+
+  const { data: establishment, error: establishmentError } = await client
+    .from('establishments')
+    .select('id,slug,name')
+    .eq('id', establishmentId)
+    .single();
+  if (establishmentError) throw establishmentError;
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const storage = await ensureBucket();
+  const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+  const path = `${slugify(establishment.slug)}/map/banner-${Date.now()}-${randomUUID().slice(0, 8)}.${extension}`;
+
+  const { error: uploadError } = await storage.storage
+    .from(BUCKET)
+    .upload(path, bytes, {
+      contentType: mimeType,
+      cacheControl: '31536000',
+      upsert: false,
+    });
+  if (uploadError) throw uploadError;
+
+  const { data: publicData } = storage.storage.from(BUCKET).getPublicUrl(path);
+  const url = publicData?.publicUrl || publicData?.publicURL;
+  if (!url) throw new Error('O Storage não retornou a URL pública do banner.');
+
+  await client
+    .from('establishment_media')
+    .update({ is_primary: false })
+    .eq('establishment_id', establishmentId)
+    .eq('media_type', 'BANNER_HORIZONTAL');
+
+  const { error: mediaError } = await client.from('establishment_media').insert({
+    establishment_id: establishmentId,
+    media_type: 'BANNER_HORIZONTAL',
+    source_type: 'UPLOAD',
+    url,
+    storage_path: path,
+    alt_text: `Banner de mapa de ${establishment.name}`,
+    is_primary: true,
+    metadata: {
+      purpose: 'MAP_BANNER',
+      originalName: String(file.name || ''),
+      uploadedAt: new Date().toISOString(),
+    },
+  });
+  if (mediaError) throw mediaError;
+
+  const { error: updateError } = await client
+    .from('establishments')
+    .update({ banner_url: url, updated_at: new Date().toISOString() })
+    .eq('id', establishmentId);
+  if (updateError) throw updateError;
+
+  return { url, path };
 }
 
 export async function generateEstablishmentOfferImage(establishmentId, offerId) {
