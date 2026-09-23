@@ -15,7 +15,7 @@ import styles from '@/app/section.module.css';
 
 const labels = {
   IMOBILIARIA: 'Imobiliária', HOTEL: 'Hotel', POUSADA: 'Pousada', LOCADORA: 'Locadora',
-  CONCESSIONARIA: 'Concessionária', LOJA_VEICULOS: 'Loja de veículos', ESCRITORIO: 'Escritório',
+  CONCESSIONARIA: 'Concessionária', LOJA_VEICULOS: 'Loja de veículos', LOJA_MOVEIS: 'Loja de móveis', ESCRITORIO: 'Escritório',
   RESTAURANTE: 'Restaurante', FARMACIA: 'Farmácia', MERCADO: 'Mercado', POSTO: 'Posto',
   ACADEMIA: 'Academia', CLINICA: 'Clínica', BANCO: 'Banco', SHOPPING: 'Shopping', OUTRO: 'Outro',
 };
