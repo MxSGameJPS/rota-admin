@@ -166,8 +166,8 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     </section>
 
     <section className={styles.panel}>
-      <h3>Ofertas e serviços jogáveis</h3>
-      <p>Esses itens viram ações econômicas no game: aluguel de sala, hospedagem, compra de veículo, locação de carro e outros serviços. Cada oferta fictícia pode receber sua própria imagem gerada pela IA.</p>
+      <h3>Produtos, ofertas e serviços jogáveis</h3>
+      <p>Este catálogo alimenta diretamente o game. Supermercados podem vender alimentos para a despensa; lojas de móveis podem vender camas, sofás, mesas e cadeiras com bônus; lojas de veículos podem vender carros; restaurantes podem vender refeições. Cada item aceita preço, efeitos de gameplay e imagem importada manualmente.</p>
       {item.offers.length > 0 && <div className={styles.tableWrap}><table className={styles.table}>
         <thead><tr><th>Oferta</th><th>Gameplay</th><th>Tipo</th><th>Preço</th><th>Período</th><th>Imagem</th><th>Disponível</th></tr></thead>
         <tbody>{item.offers.map(offer => <tr key={offer.id}>
