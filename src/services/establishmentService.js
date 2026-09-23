@@ -22,25 +22,65 @@ function requireClient() {
   return client;
 }
 
+function errorText(error) {
+  return [
+    error?.code ? `[${error.code}]` : '',
+    error?.message || '',
+    error?.details || '',
+    error?.hint || '',
+  ].filter(Boolean).join(' ').trim();
+}
+
 function isMissingPresenceScope(error) {
-  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-  return message.includes('presence_scope');
+  const code = String(error?.code || '').toUpperCase();
+  const message = errorText(error).toLowerCase();
+  const isMissingColumn = code === '42703'
+    || code === 'PGRST204'
+    || message.includes('column') && (
+      message.includes('does not exist')
+      || message.includes('schema cache')
+      || message.includes('could not find')
+    );
+
+  return isMissingColumn && message.includes('presence_scope');
 }
 
 function isMissingWorldTables(error) {
-  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-  return ['cities', 'establishments', 'establishment_offers', 'establishment_media', 'establishment_ad_slots']
-    .some((table) => message.includes(table));
+  const code = String(error?.code || '').toUpperCase();
+  const message = errorText(error).toLowerCase();
+  const tableNames = [
+    'cities',
+    'establishments',
+    'establishment_offers',
+    'establishment_media',
+    'establishment_ad_slots',
+  ];
+  const mentionsWorldTable = tableNames.some((table) => (
+    message.includes(`public.${table}`)
+    || message.includes(`"${table}"`)
+    || message.includes(`'${table}'`)
+    || message.includes(`relation ${table}`)
+    || message.includes(`table ${table}`)
+  ));
+
+  const isActuallyMissingRelation = code === '42P01'
+    || code === 'PGRST205'
+    || message.includes('relation') && message.includes('does not exist')
+    || message.includes('could not find the table') && message.includes('schema cache');
+
+  return isActuallyMissingRelation && mentionsWorldTable;
 }
 
 function worldStorageError(error) {
   if (isMissingPresenceScope(error)) {
-    throw new Error('O banco ainda não recebeu o escopo UNIVERSAL de estabelecimentos. Aplique docs/establishments-universal-presence.sql no Supabase do Rota.');
+    throw new Error('O banco ainda não recebeu o escopo UNIVERSAL de estabelecimentos. Aplique docs/establishments-universal-presence.sql no mesmo Supabase usado pelo Rota Admin.');
   }
   if (isMissingWorldTables(error)) {
-    throw new Error('O banco ainda não recebeu o módulo de cidades e estabelecimentos. Aplique docs/establishments-world.sql no Supabase do Rota.');
+    throw new Error('O banco realmente não encontrou uma das tabelas do módulo de cidades/estabelecimentos. Confirme que o Rota Admin está apontando para o mesmo projeto Supabase em que docs/establishments-world.sql foi aplicado.');
   }
-  throw error;
+
+  const diagnostic = errorText(error);
+  throw new Error(diagnostic || 'Falha desconhecida ao acessar o módulo de estabelecimentos.');
 }
 
 function parseJson(text) {
