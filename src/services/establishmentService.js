@@ -95,7 +95,7 @@ export async function listEstablishments() {
   if (!client) return [];
   const { data, error } = await client
     .from('establishments')
-    .select('id,slug,name,business_type,subcategory,status,is_active,is_fictional,is_sponsored,game_use_type,version,updated_at,city:cities(id,name,state_code)')
+    .select('id,slug,name,business_type,subcategory,status,is_active,is_fictional,is_sponsored,game_use_type,presence_scope,version,updated_at,city:cities(id,name,state_code)')
     .order('created_at', { ascending: false });
   if (error) {
     if (isMissingWorldTables(error)) return [];
