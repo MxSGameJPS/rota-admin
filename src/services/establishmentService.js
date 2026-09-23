@@ -8,6 +8,7 @@ import {
   OFFER_TYPES,
   PERIOD_TYPES,
   PRESENCE_SCOPES,
+  PRODUCT_KINDS,
   establishmentGeneratedSchema,
   normalizeSlug,
 } from '@/schemas/establishment';
@@ -339,6 +340,21 @@ export async function createOffer(establishmentId, input) {
   if (!PERIOD_TYPES.includes(input.periodType)) throw new Error('Período inválido.');
   const price = String(input.price ?? '').trim() === '' ? null : Number(input.price);
   if (price != null && (!Number.isFinite(price) || price < 0)) throw new Error('Preço inválido.');
+  const productKind = PRODUCT_KINDS.includes(input.productKind) ? input.productKind : 'OTHER';
+  const safeNumber = (value, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+  };
+  const gameplayEffects = {
+    kind: productKind,
+    foodUnits: Math.floor(safeNumber(input.foodUnits)),
+    hungerRestore: safeNumber(input.hungerRestore),
+    furnitureKind: String(input.furnitureKind || '').trim().toUpperCase(),
+    energyBonus: safeNumber(input.energyBonus),
+    comfortBonus: safeNumber(input.comfortBonus),
+    studyBonus: safeNumber(input.studyBonus),
+  };
+
   const { data, error } = await client.from('establishment_offers').insert({
     establishment_id: establishmentId,
     title: String(input.title || '').trim(),
@@ -347,8 +363,8 @@ export async function createOffer(establishmentId, input) {
     price,
     period_type: input.periodType,
     is_available: true,
-    gameplay_effects: {},
-    metadata: {},
+    gameplay_effects: gameplayEffects,
+    metadata: { productKind },
   }).select('*').single();
   if (error) worldStorageError(error);
   return data;
@@ -360,4 +376,4 @@ export async function archiveEstablishment(id) {
   if (error) worldStorageError(error);
 }
 
-export { AD_SLOT_TYPES, BUSINESS_TYPES, GAME_USE_TYPES, OFFER_TYPES, PERIOD_TYPES, PRESENCE_SCOPES };
+export { AD_SLOT_TYPES, BUSINESS_TYPES, GAME_USE_TYPES, OFFER_TYPES, PERIOD_TYPES, PRESENCE_SCOPES, PRODUCT_KINDS };
