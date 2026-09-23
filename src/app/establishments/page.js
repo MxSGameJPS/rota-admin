@@ -2,6 +2,7 @@ import Link from 'next/link';
 import StatusBadge from '@/components/StatusBadge/StatusBadge';
 import {
   BUSINESS_TYPES,
+  PRESENCE_SCOPES,
   listCities,
   listEstablishments,
 } from '@/services/establishmentService';
@@ -57,10 +58,15 @@ export default async function EstablishmentsPage({ searchParams }) {
       <h3>Gerar estabelecimento com IA</h3>
       <p>A IA cria marca fictícia, identidade visual, endereço narrativo, serviços, preços iniciais e pontos de mídia. Depois você revisa tudo antes de publicar no game.</p>
       <form className={styles.form} action={generateEstablishmentAction}>
-        <select name="cityId" required defaultValue="">
-          <option value="" disabled>Escolha a cidade</option>
-          {cities.map(city => <option key={city.id} value={city.id}>{city.name} / {city.state_code}</option>)}
-        </select>
+        <div className={styles.formGrid}>
+          <select name="cityId" required defaultValue="">
+            <option value="" disabled>Escolha a cidade de referência</option>
+            {cities.map(city => <option key={city.id} value={city.id}>{city.name} / {city.state_code}</option>)}
+          </select>
+          <select name="presenceScope" defaultValue="CITY">
+            {PRESENCE_SCOPES.map(scope => <option key={scope} value={scope}>{scope === 'UNIVERSAL' ? 'Universal — aparece em qualquer cidade' : 'Cidade específica'}</option>)}
+          </select>
+        </div>
         <textarea name="prompt" required placeholder="Ex.: Crie uma imobiliária fictícia em Barra do Piraí/RJ, de porte médio, focada em locação de salas comerciais, escritórios e imóveis residenciais. Deve parecer uma empresa local confiável e ter espaço para banners dentro do jogo." />
         <button className={styles.primary} disabled={cities.length === 0}>Gerar estabelecimento em draft</button>
       </form>
@@ -74,6 +80,9 @@ export default async function EstablishmentsPage({ searchParams }) {
           <select name="cityId" required defaultValue="">
             <option value="" disabled>Escolha a cidade</option>
             {cities.map(city => <option key={city.id} value={city.id}>{city.name} / {city.state_code}</option>)}
+          </select>
+          <select name="presenceScope" defaultValue="CITY">
+            {PRESENCE_SCOPES.map(scope => <option key={scope} value={scope}>{scope === 'UNIVERSAL' ? 'Universal — todas as cidades' : 'Cidade específica'}</option>)}
           </select>
           <select name="businessType" required defaultValue="IMOBILIARIA">
             {BUSINESS_TYPES.map(type => <option key={type} value={type}>{labels[type] || type}</option>)}
@@ -91,9 +100,10 @@ export default async function EstablishmentsPage({ searchParams }) {
       <h3>Mundo comercial</h3>
       {establishments.length === 0 ? <div className={styles.empty}>Nenhum estabelecimento cadastrado.</div> : <div className={styles.tableWrap}>
         <table className={styles.table}>
-          <thead><tr><th>Estabelecimento</th><th>Cidade</th><th>Tipo</th><th>Modelo</th><th>Status</th><th>Versão</th></tr></thead>
+          <thead><tr><th>Estabelecimento</th><th>Presença</th><th>Cidade referência</th><th>Tipo</th><th>Modelo</th><th>Status</th><th>Versão</th></tr></thead>
           <tbody>{establishments.map(item => <tr key={item.id}>
             <td><Link href={`/establishments/${item.id}`}><strong>{item.name}</strong></Link><br/>{item.slug}</td>
+            <td>{item.presence_scope === 'UNIVERSAL' ? 'Universal' : 'Cidade específica'}</td>
             <td>{item.city?.name || '—'} / {item.city?.state_code || '—'}</td>
             <td>{labels[item.business_type] || item.business_type}<br/>{item.subcategory || ''}</td>
             <td>{item.is_sponsored ? 'Patrocinado' : item.is_fictional ? 'Fictício' : 'Real não patrocinado'}<br/>{item.game_use_type}</td>
