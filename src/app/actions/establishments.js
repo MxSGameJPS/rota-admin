@@ -14,6 +14,7 @@ import {
 import {
   generateEstablishmentMedia,
   generateEstablishmentOfferImage,
+  uploadEstablishmentMapBanner,
 } from '@/services/establishmentMediaService';
 import { createEstablishmentAdSlot } from '@/services/establishmentAdService';
 
@@ -169,6 +170,20 @@ export async function generateEstablishmentMediaAction(id, mediaType) {
     await generateEstablishmentMedia(id, mediaType);
     revalidatePath(route);
     redirect(`${route}?mediaGenerated=${encodeURIComponent(mediaType)}`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error);
+  }
+}
+
+export async function uploadEstablishmentMapBannerAction(id, formData) {
+  const route = `/establishments/${id}`;
+  try {
+    const file = formData.get('mapBanner');
+    await uploadEstablishmentMapBanner(id, file);
+    revalidatePath(route);
+    revalidatePath('/establishments');
+    redirect(`${route}?bannerUploaded=1`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error);
