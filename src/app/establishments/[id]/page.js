@@ -4,6 +4,7 @@ import {
   AD_SLOT_TYPES,
   BUSINESS_TYPES,
   GAME_USE_TYPES,
+  PRESENCE_SCOPES,
   OFFER_TYPES,
   PERIOD_TYPES,
   getEstablishment,
@@ -17,6 +18,7 @@ import {
   generateEstablishmentOfferImageAction,
   publishEstablishmentAction,
   updateEstablishmentAction,
+  uploadEstablishmentMapBannerAction,
 } from '@/app/actions/establishments';
 import styles from '@/app/section.module.css';
 
@@ -62,7 +64,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
       <div>
         <Link href="/establishments">← Estabelecimentos</Link>
         <h2>{item.name}</h2>
-        <p>{item.city?.name} / {item.city?.state_code} • {businessLabels[item.business_type] || item.business_type} • {item.is_sponsored ? 'PATROCINADO' : item.is_fictional ? 'FICTÍCIO' : 'REAL'}</p>
+        <p>{item.presence_scope === 'UNIVERSAL' ? 'UNIVERSAL • TODAS AS CIDADES' : `${item.city?.name || '—'} / ${item.city?.state_code || '—'}`} • {businessLabels[item.business_type] || item.business_type} • {item.is_sponsored ? 'PATROCINADO' : item.is_fictional ? 'FICTÍCIO' : 'REAL'}</p>
       </div>
       <StatusBadge status={item.status}/>
     </div>
@@ -75,6 +77,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     {query?.offerImageGenerated && <div className={styles.notice}>Imagem da oferta gerada e vinculada.</div>}
     {query?.adSlotCreated && <div className={styles.notice}>Slot publicitário criado.</div>}
     {query?.mediaGenerated && <div className={styles.notice}>Mídia {query.mediaGenerated} gerada e vinculada.</div>}
+    {query?.bannerUploaded && <div className={styles.notice}>Banner do mapa importado e vinculado ao estabelecimento.</div>}
     {query?.error && <div className={styles.error}>{query.error}</div>}
 
     <section className={styles.panel}>
@@ -86,6 +89,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
           <label>Tipo<select name="businessType" defaultValue={item.business_type}>{BUSINESS_TYPES.map(type => <option key={type} value={type}>{businessLabels[type] || type}</option>)}</select></label>
           <label>Subcategoria<input name="subcategory" defaultValue={item.subcategory || ''} /></label>
           <label>Uso no game<select name="gameUseType" defaultValue={item.game_use_type || 'MIXED'}>{GAME_USE_TYPES.map(type => <option key={type} value={type}>{gameLabels[type] || type}</option>)}</select></label>
+          <label>Presença no mapa<select name="presenceScope" defaultValue={item.presence_scope || 'CITY'}>{PRESENCE_SCOPES.map(scope => <option key={scope} value={scope}>{scope === 'UNIVERSAL' ? 'Universal — qualquer cidade' : 'Somente cidade cadastrada'}</option>)}</select></label>
           <label>Faixa de preço<input name="priceRange" defaultValue={item.price_range || ''} placeholder="Ex.: R$ a R$$$" /></label>
         </div>
         <label>Descrição<textarea name="description" defaultValue={item.description || ''} required /></label>
@@ -124,7 +128,15 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
 
     <section className={styles.panel}>
       <h3>Mídia e identidade visual</h3>
-      <p>As imagens geradas agora são fictícias. Quando houver empresa real, a geração por IA é bloqueada para evitar representar uma marca verdadeira com material inventado; use assets oficiais autorizados.</p>
+      <p>O <strong>banner horizontal</strong> é usado como destaque compacto no mapa do jogo. Para importação manual, prefira PNG/JPG/WebP horizontal, aproximadamente 1200×450 px; o jogo faz recorte responsivo para não ocupar espaço demais no mapa.</p>
+      <form className={styles.form} action={uploadEstablishmentMapBannerAction.bind(null, id)}>
+        <div className={styles.formGrid}>
+          <label>Banner do mapa<input type="file" name="mapBanner" accept="image/png,image/jpeg,image/webp" required /></label>
+          {item.banner_url ? <a href={item.banner_url} target="_blank" rel="noreferrer"><img className={styles.assetThumb} src={item.banner_url} alt={`Banner atual de ${item.name}`} /></a> : <span>Sem banner importado</span>}
+        </div>
+        <button className={styles.primary}>Importar banner do mapa</button>
+      </form>
+      <p>As imagens geradas por IA continuam disponíveis para estabelecimentos fictícios. Para empresas reais/patrocinadas, use somente materiais oficiais autorizados.</p>
       {!imageConfigured && <div className={styles.warningList}>Geração de imagens não configurada. Configure um provedor de imagem em Configurações de IA.</div>}
       {!item.is_fictional && <div className={styles.warningList}>Estabelecimento marcado como real: geração visual por IA bloqueada. Cadastre futuramente os materiais oficiais da empresa.</div>}
       <div className={styles.formGrid}>
