@@ -119,3 +119,19 @@ A estrutura já permite adicionar posteriormente:
 - coordenadas reais quando apropriado e autorizado.
 
 A migration correspondente é `docs/establishments-world.sql`.
+
+
+## Escopo de presença
+
+Cada estabelecimento possui `presence_scope`:
+
+- `CITY`: aparece somente quando a cidade-base do jogador corresponde à cidade cadastrada;
+- `UNIVERSAL`: aparece em qualquer cidade escolhida pelo jogador. A cidade cadastrada funciona apenas como referência editorial para o Admin e para geração de conteúdo.
+
+Para bancos que já possuíam o módulo antes desta opção, aplique `docs/establishments-universal-presence.sql`.
+
+## Banner compacto do mapa
+
+O campo `banner_url` é o ativo visual utilizado pelo marcador comercial no mapa do jogo. O Admin permite importar PNG, JPG ou WebP diretamente no bucket `establishment-media`.
+
+Recomendação visual: imagem horizontal próxima de 1200×450 px. No jogo ela é recortada com `object-fit: cover` para um marcador compacto de aproximadamente 112×44 px no desktop, com redução adicional em telas pequenas. O objetivo é chamar atenção sem cobrir uma área desproporcional do mapa.
