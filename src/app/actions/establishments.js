@@ -48,7 +48,8 @@ export async function generateEstablishmentAction(formData) {
     const cityId = String(formData.get('cityId') || '').trim();
     const prompt = String(formData.get('prompt') || '').trim();
     if (!cityId) throw new Error('Escolha a cidade do estabelecimento.');
-    const created = await generateEstablishmentDraft(cityId, prompt);
+    const presenceScope = String(formData.get('presenceScope') || 'CITY');
+    const created = await generateEstablishmentDraft(cityId, prompt, presenceScope);
     revalidatePath('/establishments');
     redirect(`/establishments/${created.id}?generated=1`);
   } catch (error) {
@@ -66,6 +67,7 @@ export async function createManualEstablishmentAction(formData) {
       businessType: String(formData.get('businessType') || ''),
       description: formData.get('description'),
       district: formData.get('district'),
+      presenceScope: String(formData.get('presenceScope') || 'CITY'),
       isFictional: true,
     });
     revalidatePath('/establishments');
@@ -98,6 +100,7 @@ export async function updateEstablishmentAction(id, formData) {
       priceRange: formData.get('priceRange'),
       visualStyle: formData.get('visualStyle'),
       gameUseType: String(formData.get('gameUseType') || 'MIXED'),
+      presenceScope: String(formData.get('presenceScope') || 'CITY'),
       isFictional: checked(formData, 'isFictional'),
       isSponsored: checked(formData, 'isSponsored'),
       sponsorName: formData.get('sponsorName'),
