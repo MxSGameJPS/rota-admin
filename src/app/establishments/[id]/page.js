@@ -7,6 +7,7 @@ import {
   PRESENCE_SCOPES,
   OFFER_TYPES,
   PERIOD_TYPES,
+  PRODUCT_KINDS,
   getEstablishment,
 } from '@/services/establishmentService';
 import { hasEstablishmentImageGenerationConfigured } from '@/services/establishmentMediaService';
@@ -19,12 +20,13 @@ import {
   publishEstablishmentAction,
   updateEstablishmentAction,
   uploadEstablishmentMapBannerAction,
+  uploadEstablishmentOfferImageAction,
 } from '@/app/actions/establishments';
 import styles from '@/app/section.module.css';
 
 const businessLabels = {
   IMOBILIARIA: 'Imobiliária', HOTEL: 'Hotel', POUSADA: 'Pousada', LOCADORA: 'Locadora',
-  CONCESSIONARIA: 'Concessionária', LOJA_VEICULOS: 'Loja de veículos', ESCRITORIO: 'Escritório',
+  CONCESSIONARIA: 'Concessionária', LOJA_VEICULOS: 'Loja de veículos', LOJA_MOVEIS: 'Loja de móveis', ESCRITORIO: 'Escritório',
   RESTAURANTE: 'Restaurante', FARMACIA: 'Farmácia', MERCADO: 'Mercado', POSTO: 'Posto',
   ACADEMIA: 'Academia', CLINICA: 'Clínica', BANCO: 'Banco', SHOPPING: 'Shopping', OUTRO: 'Outro',
 };
@@ -39,6 +41,16 @@ const offerLabels = {
 };
 
 const periodLabels = { NONE: 'Sem período', HOUR: 'Por hora', DAY: 'Por dia', MONTH: 'Por mês', ONE_TIME: 'Pagamento único' };
+const productKindLabels = {
+  FOOD: 'Alimento / supermercado',
+  BED: 'Cama',
+  FURNITURE: 'Móvel',
+  STUDY_FURNITURE: 'Móvel de estudo',
+  VEHICLE: 'Veículo',
+  MEAL: 'Refeição pronta',
+  SERVICE: 'Serviço',
+  OTHER: 'Outro',
+};
 const mediaLabels = { LOGO: 'Logo', BANNER_HORIZONTAL: 'Banner horizontal', BANNER_VERTICAL: 'Banner vertical', FACADE: 'Fachada', INTERIOR: 'Interior', GALLERY: 'Galeria', PROMO: 'Promocional' };
 const adSlotLabels = {
   BILLBOARD: 'Outdoor / painel', INTERIOR: 'Mídia interna', MAP_HIGHLIGHT: 'Destaque no mapa',
@@ -75,6 +87,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     {query?.published && <div className={styles.notice}>Estabelecimento publicado para o game.</div>}
     {query?.offerCreated && <div className={styles.notice}>Oferta adicionada.</div>}
     {query?.offerImageGenerated && <div className={styles.notice}>Imagem da oferta gerada e vinculada.</div>}
+    {query?.offerImageUploaded && <div className={styles.notice}>Imagem do produto importada e vinculada.</div>}
     {query?.adSlotCreated && <div className={styles.notice}>Slot publicitário criado.</div>}
     {query?.mediaGenerated && <div className={styles.notice}>Mídia {query.mediaGenerated} gerada e vinculada.</div>}
     {query?.bannerUploaded && <div className={styles.notice}>Banner do mapa importado e vinculado ao estabelecimento.</div>}
@@ -156,13 +169,21 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
       <h3>Ofertas e serviços jogáveis</h3>
       <p>Esses itens viram ações econômicas no game: aluguel de sala, hospedagem, compra de veículo, locação de carro e outros serviços. Cada oferta fictícia pode receber sua própria imagem gerada pela IA.</p>
       {item.offers.length > 0 && <div className={styles.tableWrap}><table className={styles.table}>
-        <thead><tr><th>Oferta</th><th>Tipo</th><th>Preço</th><th>Período</th><th>Imagem</th><th>Disponível</th></tr></thead>
+        <thead><tr><th>Oferta</th><th>Gameplay</th><th>Tipo</th><th>Preço</th><th>Período</th><th>Imagem</th><th>Disponível</th></tr></thead>
         <tbody>{item.offers.map(offer => <tr key={offer.id}>
           <td><strong>{offer.title}</strong><br/>{offer.description}</td>
+          <td>{productKindLabels[offer.gameplay_effects?.kind] || offer.gameplay_effects?.kind || 'Outro'}</td>
           <td>{offerLabels[offer.offer_type] || offer.offer_type}</td>
           <td>{money(offer.price)}</td>
           <td>{periodLabels[offer.period_type] || offer.period_type}</td>
-          <td>{offer.image_url ? <a href={offer.image_url} target="_blank" rel="noreferrer"><img className={styles.assetThumb} src={offer.image_url} alt={offer.title} /></a> : <form action={generateEstablishmentOfferImageAction.bind(null, id, offer.id)}><button className={styles.secondary} disabled={!canGenerateAiMedia}>Gerar imagem</button></form>}</td>
+          <td>
+            {offer.image_url && <a href={offer.image_url} target="_blank" rel="noreferrer"><img className={styles.assetThumb} src={offer.image_url} alt={offer.title} /></a>}
+            <form action={uploadEstablishmentOfferImageAction.bind(null, id, offer.id)}>
+              <input type="file" name="offerImage" accept="image/png,image/jpeg,image/webp" required />
+              <button className={styles.secondary}>Importar imagem</button>
+            </form>
+            {!offer.image_url && <form action={generateEstablishmentOfferImageAction.bind(null, id, offer.id)}><button className={styles.secondary} disabled={!canGenerateAiMedia}>Gerar imagem por IA</button></form>}
+          </td>
           <td>{offer.is_available ? 'Sim' : 'Não'}</td>
         </tr>)}</tbody>
       </table></div>}
@@ -171,9 +192,26 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
           <input name="title" placeholder="Ex.: Sala comercial executiva" required />
           <select name="offerType" defaultValue="ALUGUEL">{OFFER_TYPES.map(type => <option key={type} value={type}>{offerLabels[type]}</option>)}</select>
           <input name="price" type="number" min="0" step="0.01" placeholder="Preço em R$ (opcional)" />
-          <select name="periodType" defaultValue="MONTH">{PERIOD_TYPES.map(type => <option key={type} value={type}>{periodLabels[type]}</option>)}</select>
+          <select name="periodType" defaultValue="ONE_TIME">{PERIOD_TYPES.map(type => <option key={type} value={type}>{periodLabels[type]}</option>)}</select>
+          <select name="productKind" defaultValue="OTHER">{PRODUCT_KINDS.map(type => <option key={type} value={type}>{productKindLabels[type] || type}</option>)}</select>
         </div>
         <textarea name="description" placeholder="Descrição da oferta e uso no jogo" required />
+        <div className={styles.formGrid}>
+          <input name="foodUnits" type="number" min="0" step="1" placeholder="Unidades de despensa" />
+          <input name="hungerRestore" type="number" min="0" step="1" placeholder="Recuperação de fome" />
+          <select name="furnitureKind" defaultValue="">
+            <option value="">Tipo de móvel (se aplicável)</option>
+            <option value="BED">Cama</option>
+            <option value="SOFA">Sofá</option>
+            <option value="DESK">Mesa de estudo</option>
+            <option value="CHAIR">Cadeira</option>
+            <option value="APPLIANCE">Eletrodoméstico</option>
+            <option value="OTHER">Outro</option>
+          </select>
+          <input name="energyBonus" type="number" min="0" step="1" placeholder="Bônus de energia" />
+          <input name="comfortBonus" type="number" min="0" step="1" placeholder="Bônus de conforto" />
+          <input name="studyBonus" type="number" min="0" step="1" placeholder="Bônus de estudo" />
+        </div>
         <button className={styles.secondary}>Adicionar oferta</button>
       </form>
     </section>
