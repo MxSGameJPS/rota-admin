@@ -21,6 +21,11 @@ function requireClient() {
   return client;
 }
 
+function isMissingPresenceScope(error) {
+  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return message.includes('presence_scope');
+}
+
 function isMissingWorldTables(error) {
   const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
   return ['cities', 'establishments', 'establishment_offers', 'establishment_media', 'establishment_ad_slots']
@@ -28,6 +33,9 @@ function isMissingWorldTables(error) {
 }
 
 function worldStorageError(error) {
+  if (isMissingPresenceScope(error)) {
+    throw new Error('O banco ainda não recebeu o escopo UNIVERSAL de estabelecimentos. Aplique docs/establishments-universal-presence.sql no Supabase do Rota.');
+  }
   if (isMissingWorldTables(error)) {
     throw new Error('O banco ainda não recebeu o módulo de cidades e estabelecimentos. Aplique docs/establishments-world.sql no Supabase do Rota.');
   }
@@ -98,6 +106,9 @@ export async function listEstablishments() {
     .select('id,slug,name,business_type,subcategory,status,is_active,is_fictional,is_sponsored,game_use_type,presence_scope,version,updated_at,city:cities(id,name,state_code)')
     .order('created_at', { ascending: false });
   if (error) {
+    if (isMissingPresenceScope(error)) {
+      throw new Error('Aplique docs/establishments-universal-presence.sql no Supabase do Rota para habilitar estabelecimentos universais.');
+    }
     if (isMissingWorldTables(error)) return [];
     throw error;
   }
