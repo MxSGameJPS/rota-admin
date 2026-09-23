@@ -54,3 +54,20 @@ left join public.cities c on c.id = e.city_id
 where lower(e.slug) = 'hotel-oasis'
    or lower(e.name) = 'hotel oásis'
    or lower(e.name) = 'hotel oasis';
+
+
+-- Feed público consumido pelo jogo.
+-- Para o cenário atual em Imbé/RS, o Hotel Oásis deve aparecer aqui.
+select
+  id,
+  name,
+  slug,
+  business_type,
+  presence_scope,
+  city_name,
+  state_code,
+  jsonb_array_length(offers) as offers_count
+from public.get_game_establishments('Imbé', 'RS')
+where lower(slug) = 'hotel-oasis'
+   or lower(name) = 'hotel oásis'
+   or lower(name) = 'hotel oasis';
