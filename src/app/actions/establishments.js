@@ -15,6 +15,7 @@ import {
   generateEstablishmentMedia,
   generateEstablishmentOfferImage,
   uploadEstablishmentMapBanner,
+  uploadEstablishmentOfferImage,
 } from '@/services/establishmentMediaService';
 import { createEstablishmentAdSlot } from '@/services/establishmentAdService';
 
@@ -155,6 +156,13 @@ export async function createOfferAction(id, formData) {
       description: formData.get('description'),
       price: formData.get('price'),
       periodType: String(formData.get('periodType') || 'ONE_TIME'),
+      productKind: String(formData.get('productKind') || 'OTHER'),
+      foodUnits: formData.get('foodUnits'),
+      hungerRestore: formData.get('hungerRestore'),
+      furnitureKind: formData.get('furnitureKind'),
+      energyBonus: formData.get('energyBonus'),
+      comfortBonus: formData.get('comfortBonus'),
+      studyBonus: formData.get('studyBonus'),
     });
     revalidatePath(route);
     redirect(`${route}?offerCreated=1`);
@@ -184,6 +192,19 @@ export async function uploadEstablishmentMapBannerAction(id, formData) {
     revalidatePath(route);
     revalidatePath('/establishments');
     redirect(`${route}?bannerUploaded=1`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error);
+  }
+}
+
+export async function uploadEstablishmentOfferImageAction(id, offerId, formData) {
+  const route = `/establishments/${id}`;
+  try {
+    const file = formData.get('offerImage');
+    await uploadEstablishmentOfferImage(id, offerId, file);
+    revalidatePath(route);
+    redirect(`${route}?offerImageUploaded=1`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error);
