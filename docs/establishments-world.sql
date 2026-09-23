@@ -181,6 +181,14 @@ drop trigger if exists trg_establishment_ad_slots_updated_at on public.establish
 create trigger trg_establishment_ad_slots_updated_at before update on public.establishment_ad_slots for each row execute function public.touch_world_updated_at();
 
 -- Leitura pública restrita ao conteúdo efetivamente publicado/ativo.
+-- As policies definem quais linhas podem ser vistas; os grants permitem que
+-- as chaves anon/authenticated do jogo façam SELECT nas tabelas.
+grant select on table public.cities to anon, authenticated;
+grant select on table public.establishments to anon, authenticated;
+grant select on table public.establishment_offers to anon, authenticated;
+grant select on table public.establishment_media to anon, authenticated;
+grant select on table public.establishment_ad_slots to anon, authenticated;
+
 alter table public.cities enable row level security;
 alter table public.establishments enable row level security;
 alter table public.establishment_offers enable row level security;
@@ -226,3 +234,5 @@ comment on table public.establishment_offers is 'Produtos/serviços jogáveis: a
 comment on table public.establishment_ad_slots is 'Inventário de mídia in-game preparado para monetização futura.';
 
 commit;
+
+notify pgrst, 'reload schema';
