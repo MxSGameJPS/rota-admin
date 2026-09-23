@@ -28,3 +28,29 @@ from pg_constraint
 where conrelid = 'public.establishments'::regclass
   and conname in ('establishments_presence_scope_check','establishments_business_type_check')
 order by conname;
+
+
+-- Permissões efetivas das roles usadas pelo jogo.
+select
+  has_table_privilege('anon', 'public.cities', 'select') as anon_cities,
+  has_table_privilege('anon', 'public.establishments', 'select') as anon_establishments,
+  has_table_privilege('anon', 'public.establishment_offers', 'select') as anon_offers,
+  has_table_privilege('authenticated', 'public.cities', 'select') as authenticated_cities,
+  has_table_privilege('authenticated', 'public.establishments', 'select') as authenticated_establishments,
+  has_table_privilege('authenticated', 'public.establishment_offers', 'select') as authenticated_offers;
+
+-- O Hotel Oásis, se existir, deve aparecer aqui como published/active.
+select
+  e.id,
+  e.name,
+  e.slug,
+  e.status,
+  e.is_active,
+  e.presence_scope,
+  c.name as city_name,
+  c.state_code
+from public.establishments e
+left join public.cities c on c.id = e.city_id
+where lower(e.slug) = 'hotel-oasis'
+   or lower(e.name) = 'hotel oásis'
+   or lower(e.name) = 'hotel oasis';
