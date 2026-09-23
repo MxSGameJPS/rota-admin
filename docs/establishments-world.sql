@@ -73,7 +73,7 @@ create table if not exists public.establishments (
   updated_at timestamptz not null default now(),
   constraint establishments_business_type_check check (business_type in (
     'IMOBILIARIA','HOTEL','POUSADA','LOCADORA','CONCESSIONARIA','LOJA_VEICULOS','ESCRITORIO',
-    'RESTAURANTE','FARMACIA','MERCADO','POSTO','ACADEMIA','CLINICA','BANCO','SHOPPING','OUTRO'
+    'RESTAURANTE','FARMACIA','MERCADO','LOJA_MOVEIS','POSTO','ACADEMIA','CLINICA','BANCO','SHOPPING','OUTRO'
   )),
   constraint establishments_game_use_type_check check (game_use_type in ('MAP_ONLY','SERVICE_PROVIDER','VISITABLE','MIXED')),
   constraint establishments_presence_scope_check check (presence_scope in ('CITY','UNIVERSAL')),
