@@ -32,6 +32,7 @@ create table if not exists public.establishments (
   description text not null,
   slogan text,
   city_id uuid not null references public.cities(id) on update cascade on delete restrict,
+  presence_scope text not null default 'CITY',
   district text,
   street_name text,
   number_reference text,
@@ -75,6 +76,7 @@ create table if not exists public.establishments (
     'RESTAURANTE','FARMACIA','MERCADO','POSTO','ACADEMIA','CLINICA','BANCO','SHOPPING','OUTRO'
   )),
   constraint establishments_game_use_type_check check (game_use_type in ('MAP_ONLY','SERVICE_PROVIDER','VISITABLE','MIXED')),
+  constraint establishments_presence_scope_check check (presence_scope in ('CITY','UNIVERSAL')),
   constraint establishments_status_check check (status in ('draft','published','archived')),
   constraint establishments_latitude_check check (latitude is null or latitude between -90 and 90),
   constraint establishments_longitude_check check (longitude is null or longitude between -180 and 180),
@@ -144,6 +146,7 @@ create table if not exists public.establishment_ad_slots (
 create index if not exists cities_state_name_idx on public.cities(state_code, name);
 create index if not exists establishments_city_idx on public.establishments(city_id);
 create index if not exists establishments_city_type_idx on public.establishments(city_id, business_type);
+create index if not exists establishments_presence_scope_idx on public.establishments(presence_scope, status, is_active);
 create index if not exists establishments_publication_idx on public.establishments(status, is_active, city_id);
 create index if not exists establishments_sponsored_idx on public.establishments(is_sponsored, is_active) where is_sponsored = true;
 create index if not exists establishment_offers_establishment_idx on public.establishment_offers(establishment_id, is_available);
@@ -216,6 +219,7 @@ create policy "public_read_published_establishment_ad_slots" on public.establish
 
 comment on table public.cities is 'Cidades persistentes do universo do Rota da Justiça.';
 comment on table public.establishments is 'Empresas e pontos comerciais persistentes, fictícios ou reais/patrocinados.';
+comment on column public.establishments.presence_scope is 'CITY limita à cidade cadastrada; UNIVERSAL faz o estabelecimento aparecer em qualquer cidade-base do jogador.';
 comment on column public.establishments.is_fictional is 'True para marcas inventadas pelo jogo/IA; false quando representar estabelecimento real autorizado.';
 comment on column public.establishments.is_sponsored is 'True apenas quando houver relação comercial/patrocínio real cadastrado pelo administrador.';
 comment on table public.establishment_offers is 'Produtos/serviços jogáveis: aluguel de salas, hospedagem, veículos, serviços e vendas.';
