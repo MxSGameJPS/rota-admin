@@ -385,14 +385,28 @@ export async function createOffer(establishmentId, input) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
   };
+  const rawMealType = String(input.mealType || 'ANY').trim().toUpperCase();
+  const mealType = ['ANY', 'BREAKFAST', 'LUNCH_DINNER', 'SNACK'].includes(rawMealType)
+    ? rawMealType
+    : 'ANY';
+  const requiresCooking = input.requiresCooking === true
+    || String(input.requiresCooking || '').toLowerCase() === 'true'
+    || String(input.requiresCooking || '').toLowerCase() === 'on';
+
   const gameplayEffects = {
     kind: productKind,
     foodUnits: Math.floor(safeNumber(input.foodUnits)),
     hungerRestore: safeNumber(input.hungerRestore),
+    energyRestore: safeNumber(input.energyRestore),
+    mealType,
+    requiresCooking,
     furnitureKind: String(input.furnitureKind || '').trim().toUpperCase(),
     energyBonus: safeNumber(input.energyBonus),
     comfortBonus: safeNumber(input.comfortBonus),
     studyBonus: safeNumber(input.studyBonus),
+    hygieneBonus: safeNumber(input.hygieneBonus),
+    mealBonus: safeNumber(input.mealBonus),
+    foodStorageBonus: safeNumber(input.foodStorageBonus),
   };
 
   const { data, error } = await client.from('establishment_offers').insert({
