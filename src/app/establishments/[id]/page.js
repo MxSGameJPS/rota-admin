@@ -46,6 +46,7 @@ const productKindLabels = {
   BED: 'Cama',
   FURNITURE: 'Móvel',
   STUDY_FURNITURE: 'Móvel de estudo',
+  APPLIANCE: 'Eletrodoméstico',
   VEHICLE: 'Veículo',
   MEAL: 'Refeição pronta',
   SERVICE: 'Serviço',
@@ -198,7 +199,18 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
         <textarea name="description" placeholder="Descrição da oferta e uso no jogo" required />
         <div className={styles.formGrid}>
           <input name="foodUnits" type="number" min="0" step="1" placeholder="Unidades de despensa" />
-          <input name="hungerRestore" type="number" min="0" step="1" placeholder="Recuperação de fome" />
+          <input name="hungerRestore" type="number" min="0" step="1" placeholder="Recuperação de saciedade" />
+          <input name="energyRestore" type="number" min="0" step="1" placeholder="Energia da refeição" />
+          <select name="mealType" defaultValue="ANY">
+            <option value="ANY">Qualquer refeição</option>
+            <option value="BREAKFAST">Café da manhã</option>
+            <option value="LUNCH_DINNER">Almoço / jantar</option>
+            <option value="SNACK">Lanche</option>
+          </select>
+          <label className={styles.checkRow}>
+            <input name="requiresCooking" type="checkbox" />
+            Precisa de gás/preparo
+          </label>
           <select name="furnitureKind" defaultValue="">
             <option value="">Tipo de móvel (se aplicável)</option>
             <option value="BED">Cama</option>
@@ -211,6 +223,9 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
           <input name="energyBonus" type="number" min="0" step="1" placeholder="Bônus de energia" />
           <input name="comfortBonus" type="number" min="0" step="1" placeholder="Bônus de conforto" />
           <input name="studyBonus" type="number" min="0" step="1" placeholder="Bônus de estudo" />
+          <input name="hygieneBonus" type="number" min="0" step="1" placeholder="Bônus de higiene" />
+          <input name="mealBonus" type="number" min="0" step="1" placeholder="Bônus de refeição" />
+          <input name="foodStorageBonus" type="number" min="0" step="1" placeholder="Bônus de armazenamento" />
         </div>
         <button className={styles.secondary}>Adicionar oferta</button>
       </form>
