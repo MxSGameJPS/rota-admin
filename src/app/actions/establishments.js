@@ -10,6 +10,7 @@ import {
   generateEstablishmentDraft,
   publishEstablishment,
   updateEstablishment,
+  updateOffer,
 } from '@/services/establishmentService';
 import {
   generateEstablishmentMedia,
@@ -172,6 +173,38 @@ export async function createOfferAction(id, formData) {
     });
     revalidatePath(route);
     redirect(`${route}?offerCreated=1`);
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
+    fail(route, error);
+  }
+}
+
+export async function updateOfferAction(id, offerId, formData) {
+  const route = `/establishments/${id}`;
+  try {
+    await updateOffer(id, offerId, {
+      title: formData.get('title'),
+      offerType: String(formData.get('offerType') || ''),
+      description: formData.get('description'),
+      price: formData.get('price'),
+      periodType: String(formData.get('periodType') || 'ONE_TIME'),
+      productKind: String(formData.get('productKind') || 'OTHER'),
+      foodUnits: formData.get('foodUnits'),
+      hungerRestore: formData.get('hungerRestore'),
+      energyRestore: formData.get('energyRestore'),
+      mealType: formData.get('mealType'),
+      requiresCooking: formData.get('requiresCooking'),
+      furnitureKind: formData.get('furnitureKind'),
+      energyBonus: formData.get('energyBonus'),
+      comfortBonus: formData.get('comfortBonus'),
+      studyBonus: formData.get('studyBonus'),
+      hygieneBonus: formData.get('hygieneBonus'),
+      mealBonus: formData.get('mealBonus'),
+      foodStorageBonus: formData.get('foodStorageBonus'),
+      isAvailable: checked(formData, 'isAvailable'),
+    });
+    revalidatePath(route);
+    redirect(`${route}?offerUpdated=1`);
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error;
     fail(route, error);
