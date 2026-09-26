@@ -19,6 +19,7 @@ import {
   generateEstablishmentOfferImageAction,
   publishEstablishmentAction,
   updateEstablishmentAction,
+  updateOfferAction,
   uploadEstablishmentMapBannerAction,
   uploadEstablishmentOfferImageAction,
 } from '@/app/actions/establishments';
@@ -87,6 +88,7 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
     {query?.saved && <div className={styles.notice}>Alterações salvas.</div>}
     {query?.published && <div className={styles.notice}>Estabelecimento publicado para o game.</div>}
     {query?.offerCreated && <div className={styles.notice}>Oferta adicionada.</div>}
+    {query?.offerUpdated && <div className={styles.notice}>Oferta e efeitos de gameplay atualizados.</div>}
     {query?.offerImageGenerated && <div className={styles.notice}>Imagem da oferta gerada e vinculada.</div>}
     {query?.offerImageUploaded && <div className={styles.notice}>Imagem do produto importada e vinculada.</div>}
     {query?.adSlotCreated && <div className={styles.notice}>Slot publicitário criado.</div>}
@@ -188,6 +190,48 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
           <td>{offer.is_available ? 'Sim' : 'Não'}</td>
         </tr>)}</tbody>
       </table></div>}
+      {item.offers.length > 0 && <div className={styles.form}>
+        <h4>Editar gameplay das ofertas existentes</h4>
+        <p>Use esta área para transformar itens já cadastrados em refeições, alimentos, móveis, veículos ou serviços sem recriá-los.</p>
+        {item.offers.map(offer => {
+          const effects = offer.gameplay_effects || {};
+          return <details key={`edit-${offer.id}`} className={styles.panel}>
+            <summary><strong>{offer.title}</strong> • {productKindLabels[effects.kind] || effects.kind || 'Outro'}</summary>
+            <form className={styles.form} action={updateOfferAction.bind(null, id, offer.id)}>
+              <div className={styles.formGrid}>
+                <label>Título<input name="title" defaultValue={offer.title || ''} required /></label>
+                <label>Tipo<select name="offerType" defaultValue={offer.offer_type}>{OFFER_TYPES.map(type => <option key={type} value={type}>{offerLabels[type]}</option>)}</select></label>
+                <label>Preço<input name="price" type="number" min="0" step="0.01" defaultValue={offer.price ?? ''} /></label>
+                <label>Período<select name="periodType" defaultValue={offer.period_type || 'ONE_TIME'}>{PERIOD_TYPES.map(type => <option key={type} value={type}>{periodLabels[type]}</option>)}</select></label>
+                <label>Gameplay<select name="productKind" defaultValue={effects.kind || 'OTHER'}>{PRODUCT_KINDS.map(type => <option key={type} value={type}>{productKindLabels[type] || type}</option>)}</select></label>
+                <label>Refeição<select name="mealType" defaultValue={effects.mealType || 'ANY'}>
+                  <option value="ANY">Qualquer refeição</option>
+                  <option value="BREAKFAST">Café da manhã</option>
+                  <option value="LUNCH_DINNER">Almoço / jantar</option>
+                  <option value="SNACK">Lanche</option>
+                </select></label>
+                <label>Saciedade<input name="hungerRestore" type="number" min="0" step="1" defaultValue={effects.hungerRestore ?? 0} /></label>
+                <label>Energia da refeição<input name="energyRestore" type="number" min="0" step="1" defaultValue={effects.energyRestore ?? 0} /></label>
+                <label>Unidades de despensa<input name="foodUnits" type="number" min="0" step="1" defaultValue={effects.foodUnits ?? 0} /></label>
+                <label>Tipo de móvel<select name="furnitureKind" defaultValue={effects.furnitureKind || ''}>
+                  <option value="">Não aplicável</option><option value="BED">Cama</option><option value="SOFA">Sofá</option><option value="DESK">Mesa de estudo</option><option value="CHAIR">Cadeira</option><option value="APPLIANCE">Eletrodoméstico</option><option value="OTHER">Outro</option>
+                </select></label>
+                <label>Bônus energia<input name="energyBonus" type="number" min="0" step="1" defaultValue={effects.energyBonus ?? 0} /></label>
+                <label>Bônus conforto<input name="comfortBonus" type="number" min="0" step="1" defaultValue={effects.comfortBonus ?? 0} /></label>
+                <label>Bônus estudo<input name="studyBonus" type="number" min="0" step="1" defaultValue={effects.studyBonus ?? 0} /></label>
+                <label>Bônus higiene<input name="hygieneBonus" type="number" min="0" step="1" defaultValue={effects.hygieneBonus ?? 0} /></label>
+                <label>Bônus refeição<input name="mealBonus" type="number" min="0" step="1" defaultValue={effects.mealBonus ?? 0} /></label>
+                <label>Bônus armazenamento<input name="foodStorageBonus" type="number" min="0" step="1" defaultValue={effects.foodStorageBonus ?? 0} /></label>
+                <label className={styles.checkRow}><input name="requiresCooking" type="checkbox" defaultChecked={Boolean(effects.requiresCooking)} /> Precisa de preparo/gás</label>
+                <label className={styles.checkRow}><input name="isAvailable" type="checkbox" defaultChecked={offer.is_available !== false} /> Disponível no jogo</label>
+              </div>
+              <label>Descrição<textarea name="description" defaultValue={offer.description || ''} required /></label>
+              <button className={styles.secondary}>Salvar gameplay da oferta</button>
+            </form>
+          </details>;
+        })}
+      </div>}
+
       <form className={styles.form} action={createOfferAction.bind(null, id)}>
         <div className={styles.formGrid}>
           <input name="title" placeholder="Ex.: Sala comercial executiva" required />
