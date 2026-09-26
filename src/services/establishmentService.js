@@ -424,6 +424,58 @@ export async function createOffer(establishmentId, input) {
   return data;
 }
 
+export async function updateOffer(establishmentId, offerId, input) {
+  const client = requireClient();
+  if (!OFFER_TYPES.includes(input.offerType)) throw new Error('Tipo de oferta inválido.');
+  if (!PERIOD_TYPES.includes(input.periodType)) throw new Error('Período inválido.');
+
+  const price = String(input.price ?? '').trim() === '' ? null : Number(input.price);
+  if (price != null && (!Number.isFinite(price) || price < 0)) throw new Error('Preço inválido.');
+
+  const productKind = PRODUCT_KINDS.includes(input.productKind) ? input.productKind : 'OTHER';
+  const safeNumber = (value, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+  };
+  const rawMealType = String(input.mealType || 'ANY').trim().toUpperCase();
+  const mealType = ['ANY', 'BREAKFAST', 'LUNCH_DINNER', 'SNACK'].includes(rawMealType)
+    ? rawMealType
+    : 'ANY';
+  const requiresCooking = input.requiresCooking === true
+    || String(input.requiresCooking || '').toLowerCase() === 'true'
+    || String(input.requiresCooking || '').toLowerCase() === 'on';
+
+  const gameplayEffects = {
+    kind: productKind,
+    foodUnits: Math.floor(safeNumber(input.foodUnits)),
+    hungerRestore: safeNumber(input.hungerRestore),
+    energyRestore: safeNumber(input.energyRestore),
+    mealType,
+    requiresCooking,
+    furnitureKind: String(input.furnitureKind || '').trim().toUpperCase(),
+    energyBonus: safeNumber(input.energyBonus),
+    comfortBonus: safeNumber(input.comfortBonus),
+    studyBonus: safeNumber(input.studyBonus),
+    hygieneBonus: safeNumber(input.hygieneBonus),
+    mealBonus: safeNumber(input.mealBonus),
+    foodStorageBonus: safeNumber(input.foodStorageBonus),
+  };
+
+  const { data, error } = await client.from('establishment_offers').update({
+    title: String(input.title || '').trim(),
+    offer_type: input.offerType,
+    description: String(input.description || '').trim(),
+    price,
+    period_type: input.periodType,
+    is_available: input.isAvailable !== false,
+    gameplay_effects: gameplayEffects,
+    metadata: { productKind },
+  }).eq('id', offerId).eq('establishment_id', establishmentId).select('*').single();
+
+  if (error) worldStorageError(error);
+  return data;
+}
+
 export async function archiveEstablishment(id) {
   const client = requireClient();
   const { error } = await client.from('establishments').update({ status: 'archived', is_active: false, updated_at: new Date().toISOString() }).eq('id', id);
