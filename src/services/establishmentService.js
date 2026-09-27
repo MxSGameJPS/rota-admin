@@ -5,6 +5,7 @@ import {
   BUSINESS_TYPES,
   ESTABLISHMENT_GENERATED_SCHEMA_JSON,
   GAME_USE_TYPES,
+  GAMEPLAY_ACTIONS,
   OFFER_TYPES,
   PERIOD_TYPES,
   PRESENCE_SCOPES,
@@ -395,6 +396,10 @@ export async function createOffer(establishmentId, input) {
 
   const gameplayEffects = {
     kind: productKind,
+    action: GAMEPLAY_ACTIONS.includes(input.gameplayAction) && input.gameplayAction !== 'AUTO' ? input.gameplayAction : '',
+    durationMinutes: Math.floor(safeNumber(input.durationMinutes)),
+    rentalDays: Math.max(1, Math.floor(safeNumber(input.rentalDays, 1))),
+    knowledgeGain: Math.floor(safeNumber(input.knowledgeGain)),
     foodUnits: Math.floor(safeNumber(input.foodUnits)),
     hungerRestore: safeNumber(input.hungerRestore),
     energyRestore: safeNumber(input.energyRestore),
@@ -447,6 +452,10 @@ export async function updateOffer(establishmentId, offerId, input) {
 
   const gameplayEffects = {
     kind: productKind,
+    action: GAMEPLAY_ACTIONS.includes(input.gameplayAction) && input.gameplayAction !== 'AUTO' ? input.gameplayAction : '',
+    durationMinutes: Math.floor(safeNumber(input.durationMinutes)),
+    rentalDays: Math.max(1, Math.floor(safeNumber(input.rentalDays, 1))),
+    knowledgeGain: Math.floor(safeNumber(input.knowledgeGain)),
     foodUnits: Math.floor(safeNumber(input.foodUnits)),
     hungerRestore: safeNumber(input.hungerRestore),
     energyRestore: safeNumber(input.energyRestore),
