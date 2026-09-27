@@ -4,6 +4,7 @@ import {
   AD_SLOT_TYPES,
   BUSINESS_TYPES,
   GAME_USE_TYPES,
+  GAMEPLAY_ACTIONS,
   PRESENCE_SCOPES,
   OFFER_TYPES,
   PERIOD_TYPES,
@@ -204,6 +205,10 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
                 <label>Preço<input name="price" type="number" min="0" step="0.01" defaultValue={offer.price ?? ''} /></label>
                 <label>Período<select name="periodType" defaultValue={offer.period_type || 'ONE_TIME'}>{PERIOD_TYPES.map(type => <option key={type} value={type}>{periodLabels[type]}</option>)}</select></label>
                 <label>Gameplay<select name="productKind" defaultValue={effects.kind || 'OTHER'}>{PRODUCT_KINDS.map(type => <option key={type} value={type}>{productKindLabels[type] || type}</option>)}</select></label>
+                <label>Ação no jogo<select name="gameplayAction" defaultValue={effects.action || 'AUTO'}>{GAMEPLAY_ACTIONS.map(action => <option key={action} value={action}>{action === 'AUTO' ? 'Automático (inferir)' : action}</option>)}</select></label>
+                <label>Duração (min)<input name="durationMinutes" type="number" min="0" step="1" defaultValue={effects.durationMinutes ?? 0} /></label>
+                <label>Dias de locação<input name="rentalDays" type="number" min="1" step="1" defaultValue={effects.rentalDays ?? 1} /></label>
+                <label>Ganho de conhecimento<input name="knowledgeGain" type="number" min="0" step="1" defaultValue={effects.knowledgeGain ?? 0} /></label>
                 <label>Refeição<select name="mealType" defaultValue={effects.mealType || 'ANY'}>
                   <option value="ANY">Qualquer refeição</option>
                   <option value="BREAKFAST">Café da manhã</option>
@@ -239,6 +244,10 @@ export default async function EstablishmentDetailPage({ params, searchParams }) 
           <input name="price" type="number" min="0" step="0.01" placeholder="Preço em R$ (opcional)" />
           <select name="periodType" defaultValue="ONE_TIME">{PERIOD_TYPES.map(type => <option key={type} value={type}>{periodLabels[type]}</option>)}</select>
           <select name="productKind" defaultValue="OTHER">{PRODUCT_KINDS.map(type => <option key={type} value={type}>{productKindLabels[type] || type}</option>)}</select>
+          <select name="gameplayAction" defaultValue="AUTO">{GAMEPLAY_ACTIONS.map(action => <option key={action} value={action}>{action === 'AUTO' ? 'Ação automática' : action}</option>)}</select>
+          <input name="durationMinutes" type="number" min="0" step="1" placeholder="Duração em minutos" />
+          <input name="rentalDays" type="number" min="1" step="1" placeholder="Dias de locação" />
+          <input name="knowledgeGain" type="number" min="0" step="1" placeholder="Ganho de conhecimento" />
         </div>
         <textarea name="description" placeholder="Descrição da oferta e uso no jogo" required />
         <div className={styles.formGrid}>
