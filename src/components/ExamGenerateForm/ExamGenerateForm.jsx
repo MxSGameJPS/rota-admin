@@ -9,7 +9,7 @@ const PRESETS = {
   mestrado: { label: 'Mestrado', questions: 40, passing: '', duration: '', levels: true },
   doutorado: { label: 'Doutorado', questions: 40, passing: '', duration: '', levels: true },
   concurso_juiz: { label: 'Concurso para Juiz', questions: 20, passing: '', duration: '', levels: false },
-  concurso_desembargador: { label: 'Concurso para Desembargador', questions: 20, passing: '', duration: '', levels: false },
+  concurso_promotor: { label: 'Concurso para Promotor de Justiça', questions: 20, passing: '', duration: '', levels: false },
 };
 
 function formatElapsed(seconds) {
@@ -123,8 +123,8 @@ export default function ExamGenerateForm({ action }) {
       </label>
 
       <div className={styles.hint}>
-        {examType === 'concurso_juiz' || examType === 'concurso_desembargador'
-          ? 'Regra do jogo: o jogador só poderá prestar este concurso com Doutorado nível 4 ou 5.'
+        {examType === 'concurso_juiz' || examType === 'concurso_promotor'
+          ? 'Regra do jogo: o jogador precisa comprovar 3 anos de atividade jurídica. Doutorado não é requisito obrigatório.'
           : preset.levels
           ? 'Mestrado e Doutorado possuem 5 níveis. A aprovação avança somente para o nível seguinte.'
           : 'A OAB mantém o preset de 80 questões, 5 horas e 40 acertos.'}
