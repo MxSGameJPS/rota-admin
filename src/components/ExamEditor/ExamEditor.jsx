@@ -19,7 +19,7 @@ export default function ExamEditor({ exam }) {
       <p>A publicação exige exatamente {exam.questionCount} questões numeradas de 1 a {exam.questionCount}, quatro alternativas A-D e uma única resposta correta.</p>
       {isOab && <p>A OAB também preserva a distribuição de matérias do escopo de referência do 46º Exame de 2026.</p>}
       {exam.targetLevel && <div className={styles.info}>Progressão acadêmica: nível-alvo {exam.targetLevel}/5. O jogador precisa avançar sequencialmente.</div>}
-      {(exam.examType === 'concurso_juiz' || exam.examType === 'concurso_desembargador') && <div className={styles.info}>Elegibilidade do jogo: Doutorado nível 4 ou 5.</div>}
+      {(exam.examType === 'concurso_juiz' || exam.examType === 'concurso_promotor') && <div className={styles.info}>Elegibilidade do jogo: 3 anos de atividade jurídica. Doutorado não é requisito obrigatório.</div>}
       {isOfficial && <div className={styles.info}>Referência oficial importada. Este registro é somente leitura no Admin.</div>}
       {isDraft && !isOfficial && missing > 0 && <form action={continueExamGenerationAction}>
         <input type="hidden" name="id" value={exam.id}/>
