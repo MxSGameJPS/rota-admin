@@ -174,6 +174,7 @@ export async function publishExam(id) {
   const client = requireClient();
   const exam = await getExamForEditor(id);
   if (exam.status !== 'draft') throw new Error('Somente provas em draft podem ser publicadas.');
+  if (exam.examType === 'concurso_desembargador') throw new Error('Concurso direto para Desembargador foi desativado. Use a progressão da magistratura ou as rotas constitucionais modeladas no jogo.');
   if (exam.questions.length !== exam.questionCount) throw new Error(`A prova possui ${exam.questions.length}/${exam.questionCount} questões. Complete a geração antes de publicar.`);
 
   const expectedScope = getExpectedQuestionScope(exam);
