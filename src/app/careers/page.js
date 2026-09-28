@@ -49,13 +49,15 @@ export default async function CareersPage() {
 
       <section className={styles.panel}>
         <h3>Carreiras recentes</h3>
-        <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Carreira</th><th>Tier</th><th>Reputação</th><th>Prestígio</th><th>Carreira pública</th><th>Acadêmico</th></tr></thead><tbody>
+        <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Carreira</th><th>Tier</th><th>Reputação</th><th>Prestígio</th><th>Carreira pública</th><th>Gameplay público</th><th>Ápice</th><th>Acadêmico</th></tr></thead><tbody>
           {overview.careers.map(career => <tr key={career.id}>
             <td><code>{career.id}</code></td>
             <td>{labels[career.career_stage] || career.career_stage || '—'}</td>
             <td>{career.reputation ?? '—'}</td>
             <td><code>{jsonSummary(career.legal_prestige)}</code></td>
             <td><code>{jsonSummary(career.public_service_career)}</code></td>
+            <td><code>{jsonSummary(career.public_service_gameplay)}</code></td>
+            <td><code>{jsonSummary(career.apex_career_state)}</code></td>
             <td><code>{jsonSummary(career.academic_career)}</code></td>
           </tr>)}
         </tbody></table></div>
