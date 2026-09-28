@@ -11,6 +11,7 @@ const links = [
   ['/economy', 'Economia'],
   ['/shop', 'Loja & Skins'],
   ['/progression', 'Progressão'],
+  ['/careers', 'Carreiras & Ato 3'],
   ['/social-juridico', 'Social Jurídico In-Game'],
   ['/studio', 'AI Content Studio'],
   ['/configuracoes/ia', 'Configurações de IA'],
