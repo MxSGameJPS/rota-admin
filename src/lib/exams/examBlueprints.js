@@ -37,18 +37,18 @@ export const EXAM_TYPE_PRESETS = {
     label: 'Concurso para Juiz',
     questionCount: 20,
     targetLevels: false,
-    eligibility: { minDoctorateLevel: 4 },
+    eligibility: { minLegalPracticeYears: 3 },
     scopeSummary: [],
-    instructions: 'Concurso de 20 questões para magistratura. O jogador só pode prestar com Doutorado em nível 4 ou 5.',
+    instructions: 'Concurso simulado de 20 questões para ingresso na magistratura. A elegibilidade do jogo exige 3 anos de atividade jurídica; Doutorado não é requisito obrigatório.',
   },
-  concurso_desembargador: {
-    id: 'concurso_desembargador',
-    label: 'Concurso para Desembargador',
+  concurso_promotor: {
+    id: 'concurso_promotor',
+    label: 'Concurso para Promotor de Justiça',
     questionCount: 20,
     targetLevels: false,
-    eligibility: { minDoctorateLevel: 4 },
+    eligibility: { minLegalPracticeYears: 3 },
     scopeSummary: [],
-    instructions: 'Concurso de 20 questões de alta complexidade para tribunal. O jogador só pode prestar com Doutorado em nível 4 ou 5.',
+    instructions: 'Concurso simulado de 20 questões para ingresso no Ministério Público. A elegibilidade do jogo exige 3 anos de atividade jurídica.',
   },
 };
 
