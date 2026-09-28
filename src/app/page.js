@@ -15,6 +15,7 @@ export default async function DashboardPage() {
         <MetricCard label="NPCs" value={stats.npcs} detail="universo persistente" />
         <MetricCard label="Escritórios" value={stats.lawFirms} detail="empregadores persistentes" />
         <MetricCard label="Estabelecimentos" value={stats.establishments} detail="mundo comercial por cidade" />
+        <MetricCard label="Carreiras" value={stats.careers} detail="jogadores e progressão" />
         <MetricCard label="Itens" value={stats.items} detail="skins, boosts e cosméticos" />
         <MetricCard label="Recompensas" value={stats.rewards} detail="regras administráveis" />
       </section>
