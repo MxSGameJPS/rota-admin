@@ -10,7 +10,7 @@ const labels = {
   mestrado: 'Mestrado',
   doutorado: 'Doutorado',
   concurso_juiz: 'Concurso Juiz',
-  concurso_desembargador: 'Concurso Desembargador',
+  concurso_promotor: 'Concurso Promotor',
 };
 
 export default async function ExamsPage({ searchParams }) {
@@ -25,13 +25,13 @@ export default async function ExamsPage({ searchParams }) {
 
     <section className={styles.panel}>
       <h3>Criar avaliação com IA</h3>
-      <p>Presets do universo: OAB 80 questões; Mestrado 40; Doutorado 40; Juiz 20; Desembargador 20. Para Mestrado e Doutorado escolha o nível-alvo de 1 a 5. Nota de corte e duração dos novos módulos continuam sob controle do administrador.</p>
+      <p>Presets do universo: OAB 80 questões; Mestrado 40; Doutorado 40; Juiz 20; Promotor 20. Para Mestrado e Doutorado escolha o nível-alvo de 1 a 5. Nota de corte e duração dos novos módulos continuam sob controle do administrador.</p>
       <ExamGenerateForm action={generateExamDraftAction}/>
     </section>
 
     <section className={styles.panel}>
       <h3>Regras já registradas na progressão</h3>
-      <p>Mestrado e Doutorado possuem 5 níveis sequenciais. Concurso para Juiz e Desembargador só pode ser prestado em Doutorado nível 4 ou 5. Convites especiais usam os requisitos acadêmicos e de reputação definidos no Supabase.</p>
+      <p>Mestrado e Doutorado possuem 5 níveis sequenciais. Os concursos de ingresso para Juiz e Promotor exigem 3 anos de atividade jurídica no motor do jogo. Desembargador não possui concurso direto: a evolução ocorre pela carreira da magistratura ou pelas rotas constitucionais modeladas no jogo.</p>
     </section>
 
     <section className={styles.panel}><h3>Acervo de provas</h3>{exams.length === 0 ? <div className={styles.empty}>Nenhuma prova encontrada. Aplique primeiro as migrations do módulo de exames no Supabase.</div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Prova</th><th>Tipo</th><th>Nível</th><th>Ano</th><th>Questões</th><th>Corte</th><th>Status</th></tr></thead><tbody>{exams.map(exam => <tr key={exam.id}><td><Link href={`/exams/${exam.id}`}><strong>{exam.title}</strong></Link><br/><small>{exam.slug}</small></td><td>{labels[exam.exam_type] || exam.exam_type}</td><td>{exam.target_level ? `${exam.target_level}/5` : '—'}</td><td>{exam.year}</td><td>{exam.question_count}</td><td>{exam.passing_score}</td><td><StatusBadge status={exam.status}/></td></tr>)}</tbody></table></div>}</section>
