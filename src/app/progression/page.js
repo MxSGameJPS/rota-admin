@@ -21,7 +21,7 @@ export default async function ProgressionPage({ searchParams }) {
 
     <section className={styles.panel}>
       <h3>Estrutura atual</h3>
-      <p><strong>Estágio:</strong> 2 níveis. <strong>Advocacia:</strong> 3 níveis principais. <strong>Mestrado:</strong> 5 níveis. <strong>Doutorado:</strong> 5 níveis.</p>
+      <p><strong>Estágio:</strong> 2 níveis. <strong>Advocacia:</strong> carreira contratada, sênior, sociedade e escritório próprio. <strong>Academia:</strong> Mestrado e Doutorado com 5 níveis. <strong>Magistratura:</strong> Juiz Substituto → Juiz Titular → Desembargador. <strong>Ministério Público:</strong> Promotor Substituto → Promotor de Justiça → Procurador de Justiça.</p>
     </section>
 
     <section className={styles.panel}>
@@ -30,9 +30,9 @@ export default async function ProgressionPage({ searchParams }) {
     </section>
 
     <section className={styles.panel}>
-      <h3>Carreiras especiais por convite</h3>
-      <p>Os módulos internos destes cargos ainda são futuros; aqui ficam os requisitos e os limites de mandato que o jogo deverá respeitar.</p>
-      {specialCareers.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Cargo</th><th>Mestrado</th><th>Reputação</th><th>Mandato</th><th>Após o cargo</th></tr></thead><tbody>{specialCareers.map(item => <tr key={item.id}><td><strong>{item.title}</strong><br/><small>{item.status}</small></td><td>{item.min_master_level}/5</td><td>{item.min_reputation}%</td><td>{item.term_years} anos</td><td>{item.metadata?.afterTerm || item.end_behavior}</td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhuma definição encontrada.</div>}
+      <h3>Definições especiais legadas</h3>
+      <p>Estas linhas vêm de special_career_definitions e permanecem visíveis para auditoria. Não substituem o motor atual de concursos e progressão pública; regras antigas devem ser revisadas antes de serem usadas pelo jogo.</p>
+      {specialCareers.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Cargo</th><th>Mestrado</th><th>Doutorado</th><th>Reputação</th><th>Mandato configurado</th><th>Após o cargo</th></tr></thead><tbody>{specialCareers.map(item => <tr key={item.id}><td><strong>{item.title}</strong><br/><small>{item.status}</small></td><td>{item.min_master_level}/5</td><td>{item.min_doctorate_level}/5</td><td>{item.min_reputation}%</td><td>{item.term_years ? `${item.term_years} anos` : '—'}</td><td>{item.metadata?.afterTerm || item.end_behavior}</td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhuma definição encontrada.</div>}
     </section>
 
     <section className={styles.panel}><h3>Publicar setting adicional</h3><form className={styles.form} action={saveSettingAction}><div className={styles.formGrid}><input name="key" placeholder="career.progression.v1" required/><input name="description" placeholder="Descrição"/></div><textarea name="value" defaultValue={'{\n  "enabled": true\n}'} required/><button className={styles.primary}>Salvar setting público</button></form></section>
