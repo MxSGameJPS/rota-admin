@@ -13,6 +13,9 @@ const careerTierSchema = z.enum([
   'MAGISTRADO_SUBSTITUTO',
   'JUIZ_TITULAR',
   'DESEMBARGADOR',
+  'PROMOTOR_SUBSTITUTO',
+  'PROMOTOR_JUSTICA',
+  'PROCURADOR_JUSTICA',
   'MINISTRO_STF',
 ]);
 
@@ -268,7 +271,7 @@ export const catalogItemSchema = z.object({
   priceCurrency: z.string().min(2), priceAmount: z.number().int().min(0), effects: z.record(z.string(), z.unknown()).default({}), content: z.record(z.string(), z.unknown()).default({}), metadata: z.record(z.string(), z.unknown()).default({}), status,
 });
 
-export const examTypeSchema = z.enum(['oab_first_phase', 'mestrado', 'doutorado', 'concurso_juiz', 'concurso_desembargador']);
+export const examTypeSchema = z.enum(['oab_first_phase', 'mestrado', 'doutorado', 'concurso_juiz', 'concurso_promotor']);
 
 export const examQuestionSchema = z.object({
   number: z.number().int().min(1).max(120),
@@ -306,7 +309,7 @@ export const examSchema = examBaseSchema.superRefine((data, ctx) => {
     mestrado: 40,
     doutorado: 40,
     concurso_juiz: 20,
-    concurso_desembargador: 20,
+    concurso_promotor: 20,
   };
   if (data.questionCount !== expectedCounts[data.examType]) {
     ctx.addIssue({ code: 'custom', path: ['questionCount'], message: `${data.examType} deve ter ${expectedCounts[data.examType]} questões.` });
@@ -327,7 +330,7 @@ export const examSchema = examBaseSchema.superRefine((data, ctx) => {
 
 export const examQuestionBatchSchema = z.object({ questions: z.array(examQuestionSchema).min(1).max(10) });
 export const examDraftSchema = examBaseSchema.extend({ questions: z.array(examQuestionSchema).max(80).default([]) }).superRefine((data, ctx) => {
-  const expectedCounts = { oab_first_phase: 80, mestrado: 40, doutorado: 40, concurso_juiz: 20, concurso_desembargador: 20 };
+  const expectedCounts = { oab_first_phase: 80, mestrado: 40, doutorado: 40, concurso_juiz: 20, concurso_promotor: 20 };
   if (data.questionCount !== expectedCounts[data.examType]) ctx.addIssue({ code: 'custom', path: ['questionCount'], message: 'Quantidade de questões incompatível com o tipo de prova.' });
   if (data.passingScore > data.questionCount) ctx.addIssue({ code: 'custom', path: ['passingScore'], message: 'Nota de corte inválida.' });
   if (['mestrado', 'doutorado'].includes(data.examType) && data.targetLevel == null) ctx.addIssue({ code: 'custom', path: ['targetLevel'], message: 'Informe o nível acadêmico.' });
