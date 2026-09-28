@@ -13,6 +13,9 @@ Este projeto **não deve ser publicado na Vercel**. Ele foi desenhado para rodar
 - Recompensas
 - Loja, skins e itens
 - Progressão/configurações
+- Carreiras públicas, academia, prestígio e diagnóstico do Ato 3
+- Escritórios, recrutamento e mercado jurídico
+- Cidades, estabelecimentos e produtos de vida pessoal
 - Features do Social Jurídico In-Game
 - Conteúdo gerado por IA com validação por schema
 - Draft → revisão → publicação
@@ -106,12 +109,9 @@ Se nenhum provider estiver configurado, o painel usa o gerador de template local
 
 As migrations ficam no repositório `MxSGameJPS/rodadajusti-a`.
 
-Para esta fase, aplicar depois das migrations anteriores:
+O Admin e o jogo devem apontar para o mesmo projeto Supabase. O repositório do jogo é a fonte oficial das migrations; não mantenha uma cópia divergente aqui.
 
-```text
-supabase/migrations/20260901040000_create_admin_universe.sql
-supabase/migrations/20260901040100_add_reward_claims.sql
-```
+Além da base administrativa, módulos recentes dependem das migrations de Ato 2/Ato 3, academia e carreiras públicas. A tela **Carreiras & Ato 3** diagnostica automaticamente a presença das tabelas persistentes mais importantes no banco conectado.
 
 As Edge Functions server-authoritative também ficam no repositório do jogo:
 
@@ -132,3 +132,7 @@ Web • Android • Steam
 ```
 
 Operações frequentes ou sensíveis não devem depender de rotas da Vercel.
+
+## Validação
+
+Todo push em `main` executa `npm run lint` e `npm run build` no GitHub Actions. Conteúdo publicado continua exigindo validação de schema e, quando aplicável, regras server-authoritative no Supabase.
