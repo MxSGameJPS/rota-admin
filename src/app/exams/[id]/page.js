@@ -8,7 +8,7 @@ const labels = {
   mestrado: 'Mestrado',
   doutorado: 'Doutorado',
   concurso_juiz: 'Concurso para Juiz',
-  concurso_desembargador: 'Concurso para Desembargador',
+  concurso_promotor: 'Concurso para Promotor de Justiça',
 };
 
 export default async function ExamDetailPage({ params, searchParams }) {
